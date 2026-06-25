@@ -32,6 +32,7 @@ import ReportsView from './components/views/ReportsView';
 import SettingsView from './components/views/SettingsView';
 import MemberLogin from './components/views/MemberLogin';
 import MemberDashboardView from './components/views/MemberDashboardView';
+import CheckInView from './components/views/CheckInView';
 
 // Icons
 import { Moon, Sun, ArrowLeft, ShieldAlert } from 'lucide-react';
@@ -43,6 +44,17 @@ export default function App() {
 
   // Navigation state (SaaS routes)
   const [currentView, setCurrentView] = useState<string>(() => {
+    // Check if URL query string or hash has check-in route
+    const urlParams = new URLSearchParams(window.location.search);
+    const viewParam = urlParams.get('view');
+    if (viewParam === 'check-in' || viewParam === 'checkin') {
+      return 'check-in';
+    }
+    const hashVal = window.location.hash.toLowerCase().replace('#', '');
+    if (hashVal === 'check-in' || hashVal === 'checkin') {
+      return 'check-in';
+    }
+
     // If a member is logged in, enter member portal, if admin logged in, enter dashboard, else land on public entry
     const activeMemberSession = authService.getCurrentMemberSession();
     if (activeMemberSession) {
@@ -126,7 +138,7 @@ export default function App() {
 
   const handleViewChange = (viewId: string) => {
     // Route guarding for protected dashboard views
-    const publicViews = ['landing', 'register-member', 'register-visitor', 'prayer-request', 'admin-login', 'member-login', 'member-dashboard'];
+    const publicViews = ['landing', 'register-member', 'register-visitor', 'prayer-request', 'admin-login', 'member-login', 'member-dashboard', 'check-in'];
     const isTargetPublic = publicViews.includes(viewId);
 
     if (!isTargetPublic && !authService.isAuthenticated()) {
@@ -206,6 +218,14 @@ export default function App() {
             onBackToPortal={() => handleViewChange('landing')}
             mapName={appSettings.mapName}
             defaultChurchId={selectedPublicChurchId}
+          />
+        );
+      case 'check-in':
+        return (
+          <CheckInView
+            onBackToPortal={() => handleViewChange('landing')}
+            defaultChurchId={selectedPublicChurchId}
+            onNavigate={handleViewChange}
           />
         );
       
@@ -349,7 +369,7 @@ export default function App() {
   };
 
   // Determine if showing public entry or credential gates
-  const isPublicView = ['landing', 'register-member', 'register-visitor', 'prayer-request', 'admin-login', 'member-login', 'member-dashboard'].includes(currentView);
+  const isPublicView = ['landing', 'register-member', 'register-visitor', 'prayer-request', 'admin-login', 'member-login', 'member-dashboard', 'check-in'].includes(currentView);
 
   if (isPublicView) {
     return (

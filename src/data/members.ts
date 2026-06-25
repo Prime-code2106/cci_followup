@@ -14,7 +14,11 @@ export const mockMembers: Member[] = [
     dateJoined: "2023-01-15",
     email: "samuel.adebayo@futa.edu.ng",
     status: "Active",
-    mapName: "MAP Alpha"
+    mapName: "MAP Alpha",
+    bio: "Passionate about tech, software engineering, and sharing Christ on campus. Bible student & cell leader.",
+    interests: ["Software Dev", "Academic Excellence", "Leadership", "Christian Apologetics"],
+    ministryInvolvement: ["CCI Media", "Campus Choir"],
+    socialVisibilityOptIn: true
   },
   {
     id: "m2",
@@ -29,7 +33,11 @@ export const mockMembers: Member[] = [
     dateJoined: "2024-03-10",
     email: "esther.okafor@futa.edu.ng",
     status: "Active",
-    mapName: "MAP Alpha"
+    mapName: "MAP Alpha",
+    bio: "Passionate worship keyboardist, reader, and biochemistry enthusiast. Grace changed my life!",
+    interests: ["Piano", "Gospel Music", "Public Relations", "Content Writing"],
+    ministryInvolvement: ["CCI Sound & Music", "CCI Hospitality"],
+    socialVisibilityOptIn: true
   },
   {
     id: "m3",
@@ -44,7 +52,11 @@ export const mockMembers: Member[] = [
     dateJoined: "2024-02-14",
     email: "john.doe@futa.edu.ng",
     status: "Active",
-    mapName: "MAP Alpha"
+    mapName: "MAP Alpha",
+    bio: "Aspiring automotive engineer, lover of sound and discipleship models.",
+    interests: ["Automobiles", "Event Management", "Podcasting"],
+    ministryInvolvement: ["CCI Ushering"],
+    socialVisibilityOptIn: true
   },
   {
     id: "m4",
@@ -59,7 +71,11 @@ export const mockMembers: Member[] = [
     dateJoined: "2023-01-10",
     email: "grace.b@yahoo.com",
     status: "Active",
-    mapName: "MAP Beta"
+    mapName: "MAP Beta",
+    bio: "Architectural visualizer, creative writer, with a deep zeal for teenage evangelism.",
+    interests: ["UI/UX", "3D Modeling", "Mental Health", "Youth Missions"],
+    ministryInvolvement: ["CCI Follow-up Team", "FUTA Evangelism Unit"],
+    socialVisibilityOptIn: true
   },
   {
     id: "m5",
@@ -74,7 +90,11 @@ export const mockMembers: Member[] = [
     dateJoined: "2026-02-01",
     email: "caleb.williams@outlook.com",
     status: "Inactive", // Inactive member
-    mapName: "MAP Alpha"
+    mapName: "MAP Alpha",
+    bio: "First-year student exploring campus life and learning sound doctrine.",
+    interests: ["Football", "Geological Mapping", "Video Games"],
+    ministryInvolvement: ["CCI Drama Crew"],
+    socialVisibilityOptIn: false
   },
   {
     id: "m6",
@@ -89,7 +109,11 @@ export const mockMembers: Member[] = [
     dateJoined: "2025-05-15",
     email: "alao.david@gmail.com",
     status: "Active",
-    mapName: "MAP Alpha"
+    mapName: "MAP Alpha",
+    bio: "Avid tech programmer and cybersecurity learner. Ready to serve in all capacities.",
+    interests: ["Programming", "Cybersecurity", "Ethics", "Fitness"],
+    ministryInvolvement: ["CCI Technical Unit"],
+    socialVisibilityOptIn: true
   },
   {
     id: "m7",
@@ -104,6 +128,10 @@ export const mockMembers: Member[] = [
     dateJoined: "2024-11-20",
     email: "victoria.n@futa.edu.ng",
     status: "Active",
-    mapName: "MAP Beta"
+    mapName: "MAP Beta",
+    bio: "Microbiologist in the making, foodie, and passionate choir vocalist.",
+    interests: ["Vocal training", "Baking", "Community Outreach"],
+    ministryInvolvement: ["Campus Choir", "CCI Clean Care Group"],
+    socialVisibilityOptIn: true
   }
 ];

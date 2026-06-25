@@ -1,28 +1,46 @@
 import React, { useState, useEffect } from 'react';
-import { Member, Attendance, PrayerRequest, ChurchEvent } from '../../types';
+import { Member, Attendance, PrayerRequest, ChurchEvent, FellowshipNote, FellowshipConnection } from '../../types';
 import { memberService } from '../../services/memberService';
 import { prayerService } from '../../services/prayerService';
 import { settingsService } from '../../services/settingsService';
+import { fellowshipService } from '../../services/fellowshipService';
 import { motion } from 'motion/react';
 import {
   User, Check, Phone, Mail, Calendar, Compass, MapPin, 
   Plus, Edit, Clipboard, Sparkles, LogOut, CheckCircle, AlertCircle, HeartHandshake,
-  Clock, ShieldAlert, Award, FileText, Gift, Info
+  Clock, ShieldAlert, Award, FileText, Gift, Info, QrCode, Bell,
+  Users2, UserCheck, Send, MessageSquare, Heart, Search, CheckCircle2, RefreshCw
 } from 'lucide-react';
 
 interface MemberDashboardViewProps {
   memberId: string;
   onLogout: () => void;
   attendanceHistory: Attendance[];
+  onNavigate?: (viewId: string) => void;
 }
 
-export default function MemberDashboardView({ memberId, onLogout, attendanceHistory }: MemberDashboardViewProps) {
+export default function MemberDashboardView({ memberId, onLogout, attendanceHistory, onNavigate }: MemberDashboardViewProps) {
   const [member, setMember] = useState<Member | null>(null);
   const [prayers, setPrayers] = useState<PrayerRequest[]>([]);
   const [allAttendance, setAllAttendance] = useState<Attendance[]>([]);
   
-  // Tab control: 'dashboard' | 'prayers' | 'profile' | 'events'
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'prayers' | 'profile' | 'events'>('dashboard');
+  // Tab control: 'dashboard' | 'prayers' | 'profile' | 'events' | 'fellowship'
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'prayers' | 'profile' | 'events' | 'fellowship'>('dashboard');
+
+  // Fellowship states
+  const [connections, setConnections] = useState<Member[]>([]);
+  const [pendingRequests, setPendingRequests] = useState<{ connectionId: string; sender: Member }[]>([]);
+  const [incomingNotes, setIncomingNotes] = useState<FellowshipNote[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [discoverableMembers, setDiscoverableMembers] = useState<Member[]>([]);
+  const [expandedDirectoryMember, setExpandedDirectoryMember] = useState<string | null>(null);
+  const [expandedConnectionMember, setExpandedConnectionMember] = useState<string | null>(null);
+  
+  // Send Note state
+  const [noteToBrethren, setNoteToBrethren] = useState<string | null>(null); // Member ID chosen
+  const [noteMessage, setNoteMessage] = useState('');
+  const [noteTheme, setNoteTheme] = useState<'Prayer' | 'Encouragement' | 'Salutation' | 'Check-in'>('Encouragement');
+  const [noteSuccess, setNoteSuccess] = useState('');
 
   // Input states for new prayer request
   const [newRequestText, setNewRequestText] = useState('');
@@ -34,6 +52,10 @@ export default function MemberDashboardView({ memberId, onLogout, attendanceHist
   const [editEmail, setEditEmail] = useState('');
   const [editResidence, setEditResidence] = useState('');
   const [editPicture, setEditPicture] = useState('');
+  const [editBio, setEditBio] = useState('');
+  const [editInterests, setEditInterests] = useState('');
+  const [editMinistryInvolvement, setEditMinistryInvolvement] = useState('');
+  const [editSocialVisibilityOptIn, setEditSocialVisibilityOptIn] = useState(false);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [profileSuccess, setProfileSuccess] = useState('');
   const [profileError, setProfileError] = useState('');
@@ -87,6 +109,10 @@ export default function MemberDashboardView({ memberId, onLogout, attendanceHist
       setEditEmail(mem.email || '');
       setEditResidence(mem.residence);
       setEditPicture(mem.profilePicture || '');
+      setEditBio(mem.bio || '');
+      setEditInterests((mem.interests || []).join(', '));
+      setEditMinistryInvolvement((mem.ministryInvolvement || []).join(', '));
+      setEditSocialVisibilityOptIn(mem.socialVisibilityOptIn ?? false);
       
       // Load prayers linked by phone number or email match
       const allPrayersStr = localStorage.getItem('futamap_prayer_requests') || '[]';
@@ -108,7 +134,78 @@ export default function MemberDashboardView({ memberId, onLogout, attendanceHist
       // Filter attendance history
       const memberAttendance = attendanceHistory.filter(att => att.memberId === mem.id);
       setAllAttendance(memberAttendance);
+
+      // Fellowship data synchronization
+      const targetChurchId = mem.churchId || 'futamap';
+      const myConns = fellowshipService.getConnectedBrethren(targetChurchId, mem.id);
+      setConnections(myConns);
+
+      const incoming = fellowshipService.getPendingIncomingRequests(targetChurchId, mem.id);
+      setPendingRequests(incoming);
+
+      const notesList = fellowshipService.getNotes(targetChurchId, mem.id).filter(n => n.receiverId === mem.id);
+      setIncomingNotes(notesList);
+
+      // Identify people we can discover to send connection requests to
+      const allMembersInTenant = memberService.getMembers().filter(m => m.id !== mem.id);
+      const pendingOutgoing = fellowshipService.getPendingOutgoingRequests(targetChurchId, mem.id);
+      const pendingIncomingUserIds = incoming.map(r => r.sender.id);
+      const connectedUserIds = myConns.map(c => c.id);
+
+      const discoverable = allMembersInTenant.filter(m => 
+        m.socialVisibilityOptIn === true &&
+        !connectedUserIds.includes(m.id) &&
+        !pendingOutgoing.includes(m.id) &&
+        !pendingIncomingUserIds.includes(m.id)
+      );
+      setDiscoverableMembers(discoverable);
     }
+  };
+
+  const handleSendRequest = (receiverId: string) => {
+    if (!member) return;
+    const targetChurchId = member.churchId || 'futamap';
+    fellowshipService.sendConnectionRequest(targetChurchId, member.id, receiverId);
+    loadMemberData();
+  };
+
+  const handleAcceptRequest = (connectionId: string) => {
+    if (!member) return;
+    const targetChurchId = member.churchId || 'futamap';
+    fellowshipService.acceptConnectionRequest(targetChurchId, connectionId);
+    loadMemberData();
+  };
+
+  const handleDeclineRequest = (connectionId: string) => {
+    if (!member) return;
+    const targetChurchId = member.churchId || 'futamap';
+    fellowshipService.removeConnection(targetChurchId, connectionId);
+    loadMemberData();
+  };
+
+  const handleSendNote = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!member || !noteToBrethren || !noteMessage.trim()) return;
+    const targetChurchId = member.churchId || 'futamap';
+    
+    fellowshipService.sendFellowshipNote(
+      targetChurchId,
+      member.id,
+      member.fullName,
+      noteToBrethren,
+      noteMessage.trim(),
+      noteTheme
+    );
+
+    setNoteMessage('');
+    setNoteToBrethren(null);
+    setNoteSuccess('Spiritual encouragement sent successfully! They will see it in their Fellowship Feed immediately.');
+    
+    setTimeout(() => {
+      setNoteSuccess('');
+    }, 4000);
+
+    loadMemberData();
   };
 
   const handleUpdateProfile = (e: React.FormEvent) => {
@@ -122,12 +219,26 @@ export default function MemberDashboardView({ memberId, onLogout, attendanceHist
         throw new Error('Phone number is required.');
       }
       
+      const interestsArray = editInterests
+        .split(',')
+        .map(tag => tag.trim())
+        .filter(tag => tag.length > 0);
+
+      const ministryArray = editMinistryInvolvement
+        .split(',')
+        .map(tag => tag.trim())
+        .filter(tag => tag.length > 0);
+
       // Save changes using memberService
       memberService.updateMember(memberId, {
         phoneNumber: editPhone,
         email: editEmail,
         residence: editResidence,
-        profilePicture: editPicture
+        profilePicture: editPicture,
+        bio: editBio,
+        interests: interestsArray,
+        ministryInvolvement: ministryArray,
+        socialVisibilityOptIn: editSocialVisibilityOptIn
       });
 
       setProfileSuccess('Profile details saved successfully!');
@@ -300,6 +411,18 @@ export default function MemberDashboardView({ memberId, onLogout, attendanceHist
             >
               Events
             </button>
+            <button
+              onClick={() => setActiveTab('fellowship')}
+              className={`flex-1 sm:flex-auto px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                activeTab === 'fellowship' ? 'bg-white text-blue-600 shadow-xs' : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              <Users2 className="w-3.5 h-3.5" />
+              Fellowship Net
+              {pendingRequests.length > 0 && (
+                <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+              )}
+            </button>
           </div>
         </div>
 
@@ -309,6 +432,46 @@ export default function MemberDashboardView({ memberId, onLogout, attendanceHist
             
             {/* 1. PERSONAL INFORMATION CARD (Read-only list representation) */}
             <div className="lg:col-span-2 space-y-6">
+              
+              {/* Care Notifications & Engagement Reminders */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="bg-amber-50/70 border border-amber-100 rounded-3xl p-5 flex items-start gap-3 shadow-2xs relative overflow-hidden">
+                  <div className="p-2.5 bg-amber-100/70 text-amber-700 rounded-2xl shrink-0">
+                    <Bell className="w-5 h-5 animate-bounce-slow" />
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] font-black text-amber-800 uppercase tracking-wider">Attendance Status</span>
+                      <span className="text-[8px] font-bold text-amber-600 bg-amber-100 px-1.5 py-0.5 rounded-full select-none">Reminder</span>
+                    </div>
+                    <p className="text-xs text-amber-700 font-semibold leading-relaxed">
+                      "We missed you last Sunday!"
+                    </p>
+                    <p className="text-[10px] text-amber-600/90 font-medium leading-relaxed">
+                      Let your cell leader or pastor know if you require any virtual links, transport, or personalized care.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="bg-blue-50/70 border border-blue-105 rounded-3xl p-5 flex items-start gap-3 shadow-2xs relative overflow-hidden">
+                  <div className="p-2.5 bg-blue-100/70 text-blue-700 rounded-2xl shrink-0">
+                    <Sparkles className="w-5 h-5 animate-pulse" />
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] font-black text-blue-800 uppercase tracking-wider">Cell Agenda</span>
+                      <span className="text-[8px] font-bold text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded-full select-none font-mono">Today</span>
+                    </div>
+                    <p className="text-xs text-blue-700 font-semibold leading-relaxed">
+                      "Don’t forget MAP Meeting today!"
+                    </p>
+                    <p className="text-[10px] text-blue-600/90 font-medium leading-relaxed">
+                      Your cell group <strong>{member.mapName || 'Centennial'}</strong> is meeting at 06:30 PM. Stand in prayer with brethren!
+                    </p>
+                  </div>
+                </div>
+              </div>
+
               <div className="bg-white rounded-3xl border border-gray-100 shadow-xs p-6 space-y-4">
                 <div className="flex justify-between items-center border-b border-gray-50 pb-3">
                   <h3 className="text-base font-bold text-slate-800 flex items-center gap-1.5">
@@ -424,6 +587,29 @@ export default function MemberDashboardView({ memberId, onLogout, attendanceHist
             {/* UPCOMING EVENTS & CARE PANEL */}
             <div className="space-y-6">
               
+              {/* Express Attendance Check-In Card */}
+              <div className="bg-gradient-to-br from-blue-600 to-indigo-700 dark:from-blue-750 dark:to-indigo-850 text-white rounded-3xl shadow-lg p-6 space-y-4 relative overflow-hidden">
+                <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none">
+                  <QrCode className="w-24 h-24" />
+                </div>
+                <div className="flex items-center space-x-2 border-b border-white/10 pb-3 relative z-10">
+                  <QrCode className="w-5 h-5 text-blue-200 animate-pulse" />
+                  <span className="font-bold text-xs tracking-wide uppercase">Express Self Check-In</span>
+                </div>
+                <p className="text-xs text-blue-100 leading-relaxed font-medium relative z-10">
+                  Quickly register yourself present for Sunday Service, Midweek Service, MAP meetings, or Special church programs.
+                </p>
+                <div className="pt-1.5 relative z-10">
+                  <button
+                    onClick={() => onNavigate && onNavigate('check-in')}
+                    className="w-full py-2.5 bg-white hover:bg-blue-50 text-blue-700 font-bold text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <CheckCircle className="w-4 h-4 text-emerald-500" />
+                    Express Check-In Now
+                  </button>
+                </div>
+              </div>
+
               {/* Leader Note Read-only display */}
               <div className="bg-slate-900 text-slate-200 rounded-3xl border border-slate-800 shadow-md p-6 space-y-4">
                 <div className="flex items-center space-x-2 border-b border-slate-800 pb-3">
@@ -657,6 +843,68 @@ export default function MemberDashboardView({ memberId, onLogout, attendanceHist
                       />
                     </div>
                   </div>
+
+                  <div className="space-y-1.5 sm:col-span-2">
+                    <label htmlFor="editBio" className="block text-xs font-bold text-gray-400 uppercase tracking-widest">
+                      Personal Bio / Spiritual Testimony
+                    </label>
+                    <textarea
+                      id="editBio"
+                      value={editBio}
+                      onChange={(e) => setEditBio(e.target.value)}
+                      rows={3}
+                      placeholder="Briefly tell the brethren about yourself, your faith journey, or encouraging words..."
+                      className="block w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm bg-white focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label htmlFor="editInterests" className="block text-xs font-bold text-gray-400 uppercase tracking-widest">
+                      Interests & Areas of Zeal (Comma separated)
+                    </label>
+                    <input
+                      id="editInterests"
+                      type="text"
+                      value={editInterests}
+                      onChange={(e) => setEditInterests(e.target.value)}
+                      placeholder="e.g. Software Dev, Academic Excellence, Leadership"
+                      className="block w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm bg-white focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label htmlFor="editMinistry" className="block text-xs font-bold text-gray-400 uppercase tracking-widest">
+                      Ministry & Departmental Involvement
+                    </label>
+                    <input
+                      id="editMinistry"
+                      type="text"
+                      value={editMinistryInvolvement}
+                      onChange={(e) => setEditMinistryInvolvement(e.target.value)}
+                      placeholder="e.g. CCI Media, Sound Unit, Campus Evangelism"
+                      className="block w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm bg-white focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none"
+                    />
+                  </div>
+
+                  <div className="sm:col-span-2 p-4 bg-blue-50/40 border border-blue-105 rounded-2xl">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="space-y-1">
+                        <span className="block text-xs font-bold text-slate-800">Directory Social Visibility Opt-In</span>
+                        <p className="text-[11px] text-slate-505 leading-relaxed">
+                          When checked, other registered FUTA brethren can discover your profile, join your spiritual fellowship network, and swap prayer updates with you.
+                        </p>
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-0.5">
+                        <input
+                          type="checkbox"
+                          checked={editSocialVisibilityOptIn}
+                          onChange={(e) => setEditSocialVisibilityOptIn(e.target.checked)}
+                          className="sr-only peer"
+                        />
+                        <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                      </label>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="pt-2 border-t border-slate-50">
@@ -738,6 +986,492 @@ export default function MemberDashboardView({ memberId, onLogout, attendanceHist
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* TAB 5: FELLOWSHIP SOCIAL NETWORK (Brethren Connection Engine) */}
+        {activeTab === 'fellowship' && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fade-in relative">
+            <div className="lg:col-span-2 space-y-6">
+              
+              {/* Note Composer Success feedback toast */}
+              {noteSuccess && (
+                <div className="p-4 bg-emerald-50 border border-emerald-150 text-emerald-800 rounded-2xl text-xs font-bold flex items-center gap-2">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                  <div>{noteSuccess}</div>
+                </div>
+              )}
+
+              {/* Active Brethren Fellowship Connections Card */}
+              <div className="bg-white rounded-3xl border border-gray-100 shadow-xs p-6 space-y-4">
+                <div className="border-b border-gray-50 pb-3 flex justify-between items-center">
+                  <div>
+                    <h3 className="text-base font-bold text-slate-800 flex items-center gap-1.5">
+                      <Users2 className="w-5 h-5 text-indigo-600" />
+                      Brethren Fellowship Connections ({connections.length})
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-1">
+                      Strengthen, stand in faith, and hold each other accountable through regular fellowship tracking.
+                    </p>
+                  </div>
+                  <button 
+                    onClick={() => loadMemberData()} 
+                    className="p-2 text-slate-400 hover:text-slate-600 bg-slate-50 hover:bg-slate-100 rounded-xl transition-all cursor-pointer"
+                    title="Refresh connections"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                {connections.length === 0 ? (
+                  <div className="py-12 text-center space-y-3">
+                    <div className="w-12 h-12 bg-indigo-50 text-indigo-500 rounded-2xl flex items-center justify-center mx-auto">
+                      <Users2 className="w-6 h-6" />
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-sm font-bold text-slate-800">No Fellowship Connections Yet</p>
+                      <p className="text-xs text-slate-400 max-w-sm mx-auto leading-relaxed">
+                        Send a fellowship link request to members in your department or MAP cell to share mutual encouragements & prayer points!
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {connections.map((friend) => {
+                      // Generate a mock checking rate or attendance streak for friendly social peer support
+                      const attendanceRate = friend.fullName.length % 2 === 1 ? '90%' : '80%';
+                      const checkedInStatus = friend.fullName.length % 3 === 0 ? 'Checked In' : 'Not Checked In';
+                      const isExpanded = expandedConnectionMember === friend.id;
+
+                      return (
+                        <div key={friend.id} className="p-4 bg-slate-50/70 border border-slate-100 hover:border-indigo-150 rounded-2xl flex flex-col justify-between transition-all space-y-3">
+                          <div 
+                            className="flex items-start gap-3 cursor-pointer"
+                            onClick={() => setExpandedConnectionMember(isExpanded ? null : friend.id)}
+                          >
+                            <div className="w-10 h-10 rounded-full bg-indigo-50 border border-indigo-100 text-indigo-600 font-bold flex items-center justify-center text-sm shrink-0">
+                              {friend.profilePicture ? (
+                                <img src={friend.profilePicture} alt="Pic" className="w-full h-full rounded-full object-cover" referrerPolicy="no-referrer" />
+                              ) : friend.fullName.charAt(0)}
+                            </div>
+                             <div className="space-y-0.5 min-w-0">
+                               <span className="block text-xs font-bold text-slate-800 hover:text-indigo-600 transition-colors truncate">{friend.fullName}</span>
+                               <span className="block text-[10px] text-slate-400 font-semibold truncate flex items-center gap-1">
+                                 <span>{friend.department} • Level {friend.level}</span>
+                                 <span className="inline-flex items-center gap-0.5 text-[8.5px] bg-indigo-50 border border-indigo-100 text-indigo-700 px-1 rounded font-bold shrink-0" title="Active social connections">
+                                   🤝 {fellowshipService.getConnectedBrethren(friend.churchId || 'futamap', friend.id).length}
+                                 </span>
+                               </span>
+                             </div>
+                          </div>
+
+                          {/* Expanded detail inside Connection */}
+                          {isExpanded && (
+                            <div className="p-2.5 bg-white border border-indigo-50 rounded-xl text-[10px] space-y-2 animate-fade-in">
+                              {friend.bio ? (
+                                <p className="text-slate-650 italic">
+                                  "{friend.bio}"
+                                </p>
+                              ) : (
+                                <p className="text-slate-400 italic">No bio written yet.</p>
+                              )}
+                              {friend.interests && friend.interests.length > 0 && (
+                                <div className="space-y-0.5">
+                                  <span className="text-[8px] font-black uppercase text-indigo-400">Zeal/Interests</span>
+                                  <div className="flex flex-wrap gap-1">
+                                    {friend.interests.map((it, idx) => (
+                                      <span key={idx} className="bg-indigo-50 text-indigo-700 px-1 py-0.2 rounded text-[8px] font-extrabold">{it}</span>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                              {friend.ministryInvolvement && friend.ministryInvolvement.length > 0 && (
+                                <div className="space-y-0.5">
+                                  <span className="text-[8px] font-black uppercase text-rose-400">Ministry Group</span>
+                                  <div className="flex flex-wrap gap-1">
+                                    {friend.ministryInvolvement.map((min, idx) => (
+                                      <span key={idx} className="bg-rose-50 text-rose-700 px-1 py-0.2 rounded text-[8px] font-extrabold">{min}</span>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Social Spiritual Status Box */}
+                          <div className="p-2.5 bg-white border border-gray-150/50 rounded-xl text-[10px] space-y-1">
+                            <div className="flex justify-between items-center text-slate-500">
+                              <span>Attendance Streak:</span>
+                              <span className="font-extrabold text-slate-800">{attendanceRate} Ratios</span>
+                            </div>
+                            <div className="flex justify-between items-center text-slate-500">
+                              <span>Active Service:</span>
+                              <span className={`font-semibold px-1 rounded-sm ${checkedInStatus === 'Checked In' ? 'bg-emerald-50 text-emerald-600 font-bold' : 'bg-amber-50 text-amber-600 font-bold'}`}>
+                                {checkedInStatus}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between gap-1.5 pt-1">
+                            <button
+                              onClick={() => {
+                                setNoteToBrethren(friend.id);
+                                setNoteMessage('');
+                              }}
+                              className="flex-1 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 font-bold text-[10px] rounded-lg transition-all flex items-center justify-center gap-1 cursor-pointer"
+                            >
+                              <MessageSquare className="w-3 h-3" />
+                              Encourage
+                            </button>
+                            <button
+                              onClick={() => setExpandedConnectionMember(isExpanded ? null : friend.id)}
+                              className="px-2 py-1.5 border border-slate-200 hover:bg-slate-50 text-slate-500 rounded-lg text-[10px] shrink-0 font-medium cursor-pointer"
+                              title={isExpanded ? "Hide bio details" : "Show bio details"}
+                            >
+                              {isExpanded ? "▲ Hide" : "▼ Bio"}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Spiritual Encouragement Feed (Received notes) */}
+              <div className="bg-white rounded-3xl border border-gray-100 shadow-xs p-6 space-y-4">
+                <div className="border-b border-gray-50 pb-3">
+                  <h3 className="text-base font-bold text-slate-800 flex items-center gap-1.5">
+                    <Sparkles className="w-5 h-5 text-amber-500" />
+                    Encouragement Board / Spiritual Feed
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Spiritual exhortations, salutations, or stand-in-gap prayer notes sent to you by connected brethren.
+                  </p>
+                </div>
+
+                {incomingNotes.length === 0 ? (
+                  <div className="py-12 bg-slate-50/40 rounded-2xl text-center space-y-2">
+                    <p className="text-xs font-bold text-slate-400">Board is quiet right now</p>
+                    <p className="text-[11px] text-slate-400/80 max-w-xs mx-auto">
+                      Notes will appear here when your brethren send words of spiritual alignment or stand-in-faith greetings.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {incomingNotes.map((note) => {
+                      // Custom theme color coding
+                      const themeMap = {
+                        'Prayer': {
+                          bg: 'from-amber-50 to-orange-50/50 border-amber-200/60 text-amber-900',
+                          badge: 'bg-amber-100 text-amber-800 border-amber-200',
+                          title: 'Standing in Faith'
+                        },
+                        'Encouragement': {
+                          bg: 'from-blue-50 to-indigo-50/50 border-blue-200/60 text-blue-900',
+                          badge: 'bg-blue-100 text-blue-800 border-blue-200',
+                          title: 'Spiritual Alignment'
+                        },
+                        'Salutation': {
+                          bg: 'from-purple-50 to-fuchsia-50/50 border-purple-200/60 text-purple-900',
+                          badge: 'bg-purple-100 text-purple-800 border-purple-200',
+                          title: 'Brethren Greetings'
+                        },
+                        'Check-in': {
+                          bg: 'from-emerald-50 to-teal-50/50 border-emerald-200/60 text-emerald-955',
+                          badge: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+                          title: 'Check-In Praise'
+                        }
+                      };
+
+                      const design = themeMap[note.theme || 'Encouragement'];
+
+                      return (
+                        <div 
+                          key={note.id} 
+                          className={`p-5 bg-gradient-to-br border rounded-2xl space-y-3 ${design.bg} position-relative overflow-hidden`}
+                        >
+                          <div className="flex justify-between items-center border-b border-slate-205/30 pb-2">
+                            <div className="flex items-center gap-2">
+                              <span className="text-[9px] font-black uppercase tracking-wider text-slate-400">From Brethren:</span>
+                              <span className="text-xs font-bold text-slate-800">{note.senderName}</span>
+                            </div>
+                            <span className={`text-[9px] font-bold font-mono px-2 py-0.5 rounded-full border ${design.badge}`}>
+                              {note.theme || 'Fellowship'}
+                            </span>
+                          </div>
+
+                          <div className="text-xs italic leading-relaxed text-slate-700 font-medium whitespace-pre-wrap">
+                            "{note.message}"
+                          </div>
+
+                          <div className="flex justify-between items-center text-[9px] text-slate-400 font-semibold font-mono pt-1">
+                            <span>Status: Shared Spiritually</span>
+                            <span>{note.dateSent}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Right Column: Invites & Discovery */}
+            <div className="space-y-6">
+              
+              {/* PENDING NOTIFICATION SECTION */}
+              {pendingRequests.length > 0 && (
+                <div className="bg-rose-50/60 border border-rose-100 rounded-3xl p-6 space-y-4">
+                  <div className="border-b border-rose-100 pb-2 flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping shrink-0" />
+                    <h3 className="text-sm font-black text-rose-905">Inward Fellowship Invitations</h3>
+                  </div>
+
+                  <div className="space-y-3">
+                    {pendingRequests.map((req) => (
+                      <div key={req.connectionId} className="bg-white p-3.5 border border-rose-100 rounded-2xl space-y-2.5">
+                        <div className="flex items-center gap-2">
+                          <div className="w-7 h-7 bg-indigo-50 text-indigo-600 rounded-full font-bold flex items-center justify-center text-xs">
+                            {req.sender.fullName.charAt(0)}
+                          </div>
+                          <div>
+                            <span className="block text-xs font-bold text-slate-800">{req.sender.fullName}</span>
+                            <span className="block text-[9px] text-slate-400 font-semibold">
+                              MAP: {req.sender.mapName || 'Alpha Cell'}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-1.5 pt-1.5 border-t border-rose-50">
+                          <button
+                            onClick={() => handleAcceptRequest(req.connectionId)}
+                            className="py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] rounded-lg transition-all cursor-pointer"
+                          >
+                            Accept Link
+                          </button>
+                          <button
+                            onClick={() => handleDeclineRequest(req.connectionId)}
+                            className="py-1 bg-slate-105 hover:bg-slate-200 text-slate-600 font-semibold text-[10px] rounded-lg transition-all cursor-pointer"
+                          >
+                            Ignore
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* DISCOVER BRETHREN DIRECTORY (Searchable list of fellow members) */}
+              <div className="bg-white rounded-3xl border border-gray-100 shadow-xs p-6 space-y-4">
+                <div className="border-b border-gray-50 pb-1">
+                  <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-1.5">
+                    <Search className="w-4 h-4 text-slate-500" />
+                    Discover Brethren Directory
+                  </h3>
+                  <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
+                    Search and connect with other active members of your church who registered in CCI.
+                  </p>
+                </div>
+
+                {/* Directory Search inputs */}
+                <div className="relative">
+                  <Search className="absolute left-3 top-2.5 w-3.5 h-3.5 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Search by name, dept or cell..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="block w-full pl-9 pr-3 py-1.5 border border-gray-150 rounded-xl text-xs bg-slate-50/50 font-medium focus:ring-2 focus:ring-indigo-100 focus:bg-white transition-all outline-none"
+                  />
+                </div>
+
+                {/* Directory profiles lists */}
+                <div className="space-y-3.5 max-h-[380px] overflow-y-auto pr-1">
+                  {discoverableMembers.length === 0 ? (
+                    <p className="text-[10px] text-slate-400 text-center py-6 font-medium">All registered congregation members are connected.</p>
+                  ) : (
+                    discoverableMembers
+                      .filter(m => {
+                        const term = searchQuery.toLowerCase();
+                        return (
+                          m.fullName.toLowerCase().includes(term) ||
+                          m.department.toLowerCase().includes(term) ||
+                          m.mapName.toLowerCase().includes(term)
+                        );
+                      })
+                      .slice(0, 10) // Limit count to avoid page length blowout
+                      .map((p) => {
+                        const isExpanded = expandedDirectoryMember === p.id;
+                        return (
+                          <div 
+                            key={p.id} 
+                            className="bg-slate-50/40 hover:bg-slate-50 border border-slate-100 rounded-2xl p-3.5 transition-all space-y-2.5"
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <div 
+                                className="flex items-center gap-2.5 min-w-0 cursor-pointer flex-1"
+                                onClick={() => setExpandedDirectoryMember(isExpanded ? null : p.id)}
+                              >
+                                <div className="w-8.5 h-8.5 rounded-full bg-slate-100 text-slate-650 flex items-center justify-center font-bold text-xs shrink-0 relative">
+                                  {p.profilePicture ? (
+                                    <img src={p.profilePicture} alt="" className="w-full h-full rounded-full object-cover" referrerPolicy="no-referrer" />
+                                  ) : (
+                                    p.fullName.charAt(0)
+                                  )}
+                                  <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 border border-white" title="Social visibility enabled!" />
+                                </div>
+                                <div className="min-w-0">
+                                  <span className="block text-xs font-bold text-slate-800 hover:text-indigo-600 transition-colors truncate">{p.fullName}</span>
+                                  <span className="block text-[9px] text-slate-400 font-semibold truncate leading-none mt-0.5 flex items-center gap-1.5 flex-wrap">
+                                    <span>MAP: {p.mapName} • Level {p.level}</span>
+                                    <span className="inline-flex items-center gap-0.5 text-[8px] bg-indigo-50 border border-indigo-100 text-indigo-700 px-1 py-0.2 rounded font-black shrink-0" title="Active connections">
+                                      🤝 {fellowshipService.getConnectedBrethren(p.churchId || 'futamap', p.id).length}
+                                    </span>
+                                  </span>
+                                </div>
+                              </div>
+
+                              <button
+                                onClick={() => handleSendRequest(p.id)}
+                                className="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-[9px] rounded-lg shadow-2xs transition-all shrink-0 cursor-pointer flex items-center gap-0.5"
+                              >
+                                <Plus className="w-3 h-3" /> Connect
+                              </button>
+                            </div>
+
+                            {/* Collapsible Info Drawer segment */}
+                            {isExpanded && (
+                              <div className="pt-2 border-t border-slate-100 space-y-2 text-[11px] animate-fade-in">
+                                {p.bio ? (
+                                  <p className="text-slate-650 italic leading-relaxed bg-white border border-slate-105 p-2.5 rounded-xl">
+                                    "{p.bio}"
+                                  </p>
+                                ) : (
+                                  <p className="text-slate-400 italic">No bio written yet.</p>
+                                )}
+
+                                {p.interests && p.interests.length > 0 && (
+                                  <div className="space-y-1">
+                                    <span className="text-[9px] font-black text-indigo-400 uppercase tracking-widest block">Interests & Zeals</span>
+                                    <div className="flex flex-wrap gap-1">
+                                      {p.interests.map((interest, idx) => (
+                                        <span key={idx} className="px-1.5 py-0.5 bg-indigo-50 border border-indigo-100 text-indigo-700 font-bold rounded text-[9px]">
+                                          {interest}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+
+                                {p.ministryInvolvement && p.ministryInvolvement.length > 0 && (
+                                  <div className="space-y-1">
+                                    <span className="text-[9px] font-black text-rose-400 uppercase tracking-widest block">Ministry Involvement</span>
+                                    <div className="flex flex-wrap gap-1">
+                                      {p.ministryInvolvement.map((min, idx) => (
+                                        <span key={idx} className="px-1.5 py-0.5 bg-rose-50 border border-rose-100 text-rose-700 font-bold rounded text-[9px]">
+                                          {min}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Little helper clicker hint */}
+                            <div className="text-center border-t border-slate-50 pt-1.5">
+                              <button 
+                                onClick={() => setExpandedDirectoryMember(isExpanded ? null : p.id)}
+                                className="text-[9px] font-black text-indigo-500 hover:text-indigo-750 transition-colors uppercase tracking-wider cursor-pointer font-mono"
+                              >
+                                {isExpanded ? '▲ Hide Details' : '▼ View Bio & Ministries'}
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Note Encouragement Composer Modal/Overlay */}
+            {noteToBrethren && (() => {
+              const buddy = memberService.getMemberById(noteToBrethren);
+              return (
+                <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
+                  <div className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4 border border-slate-100">
+                    <div className="flex justify-between items-center border-b border-gray-100 pb-3">
+                      <div>
+                        <h4 className="text-sm font-extrabold text-slate-900">Encourage Brethren</h4>
+                        <p className="text-[11px] text-slate-400 mt-0.5">Share greetings, thanksgiving reminders, or spiritual updates.</p>
+                      </div>
+                      <button 
+                        onClick={() => setNoteToBrethren(null)} 
+                        className="text-slate-400 hover:text-slate-600 text-xs font-bold bg-slate-100 px-2.5 py-1 rounded-lg cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+
+                    <div className="p-3 bg-slate-50 rounded-2xl flex items-center gap-2.5">
+                      <div className="w-8 h-8 bg-indigo-100 rounded-full text-indigo-700 flex items-center justify-center font-bold text-xs">
+                        {buddy?.fullName.charAt(0)}
+                      </div>
+                      <div>
+                        <span className="block text-xs font-bold text-slate-800">{buddy?.fullName}</span>
+                        <span className="block text-[10px] text-slate-400 font-semibold">Department: {buddy?.department}</span>
+                      </div>
+                    </div>
+
+                    <form onSubmit={handleSendNote} className="space-y-4">
+                      <div className="space-y-1.5">
+                        <label className="block text-[9px] font-bold text-gray-400 uppercase tracking-widest">Select Theme Category</label>
+                        <div className="grid grid-cols-4 gap-1.5">
+                          {(['Encouragement', 'Prayer', 'Salutation', 'Check-in'] as const).map((theme) => (
+                            <button
+                              key={theme}
+                              type="button"
+                              onClick={() => setNoteTheme(theme)}
+                              className={`py-1 rounded-lg text-[10px] font-bold border transition-all text-center cursor-pointer ${
+                                noteTheme === theme 
+                                  ? 'bg-indigo-600 border-indigo-600 text-white' 
+                                  : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                              }`}
+                            >
+                              {theme}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label htmlFor="noteMessage" className="block text-[9px] font-bold text-gray-400 uppercase tracking-widest">Your Message</label>
+                        <textarea
+                          id="noteMessage"
+                          rows={3}
+                          value={noteMessage}
+                          onChange={(e) => setNoteMessage(e.target.value)}
+                          placeholder="Brethren, standing with you in intercessions. Rest assured in the grace of..."
+                          className="block w-full px-3 py-2 border border-slate-200 rounded-2xl text-xs bg-white outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-500"
+                        />
+                      </div>
+
+                      <button
+                        type="submit"
+                        disabled={!noteMessage.trim()}
+                        className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-750 disabled:bg-slate-200 text-white font-bold text-xs rounded-xl shadow-md transition-all cursor-pointer flex items-center justify-center gap-1"
+                      >
+                        <Send className="w-3.5 h-3.5" /> Send Encouragement Note
+                      </button>
+                    </form>
+                  </div>
+                </div>
+              );
+            })()}
+
           </div>
         )}
 

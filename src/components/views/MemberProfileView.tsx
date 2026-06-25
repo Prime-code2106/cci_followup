@@ -1,6 +1,8 @@
-import React, { useState, useMemo } from 'react';
-import { Member, Attendance, PrayerRequest, FollowUpNote } from '../../types';
+import React, { useState, useMemo, useEffect } from 'react';
+import { Member, Attendance, PrayerRequest, FollowUpNote, FellowshipNote } from '../../types';
 import { memberService } from '../../services/memberService';
+import { authService } from '../../services/authService';
+import { fellowshipService } from '../../services/fellowshipService';
 import StatusBadge from '../StatusBadge';
 import {
   ArrowLeft,
@@ -20,7 +22,11 @@ import {
   ClipboardCheck,
   Edit2,
   X,
-  Check
+  Check,
+  MessageSquare,
+  Send,
+  ShieldAlert,
+  Flame
 } from 'lucide-react';
 
 interface MemberProfileViewProps {
@@ -46,6 +52,87 @@ export default function MemberProfileView({
   // States
   const [isEditing, setIsEditing] = useState(false);
   const [newNote, setNewNote] = useState('');
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [chatMessages, setChatMessages] = useState<FellowshipNote[]>([]);
+  const [messageText, setMessageText] = useState('');
+  const [selectedSenderId, setSelectedSenderId] = useState<string>('');
+
+  const currentMemberSess = useMemo(() => {
+    return authService.getCurrentMemberSession();
+  }, []);
+
+  const friendCount = useMemo(() => {
+    if (!member) return 0;
+    return fellowshipService.getConnectedBrethren(member.churchId || 'futamap', memberId).length;
+  }, [member, memberId]);
+
+  useEffect(() => {
+    if (currentMemberSess) {
+      setSelectedSenderId(currentMemberSess.memberId);
+    } else {
+      const firstAvailableMember = memberService.getMembers().find(m => m.id !== memberId);
+      if (firstAvailableMember) {
+        setSelectedSenderId(firstAvailableMember.id);
+      } else {
+        setSelectedSenderId('admin_support');
+      }
+    }
+  }, [currentMemberSess, memberId]);
+
+  const loadDMs = () => {
+    if (!selectedSenderId) return;
+    const stored = localStorage.getItem('futamap_fellowship_notes');
+    if (!stored) {
+      setChatMessages([]);
+      return;
+    }
+    try {
+      const allNotes: FellowshipNote[] = JSON.parse(stored);
+      const filtered = allNotes.filter(n => 
+        (n.senderId === selectedSenderId && n.receiverId === memberId) ||
+        (n.senderId === memberId && n.receiverId === selectedSenderId)
+      );
+      filtered.sort((a,b) => new Date(a.dateSent).getTime() - new Date(b.dateSent).getTime());
+      setChatMessages(filtered);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  useEffect(() => {
+    loadDMs();
+  }, [selectedSenderId, isChatOpen, memberId]);
+
+  const handleSendMessage = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!messageText.trim() || !selectedSenderId || !member) return;
+
+    let senderName = "MAP Care Team";
+    if (selectedSenderId === 'admin_support') {
+      senderName = "MAP Care Team";
+    } else {
+      const s = memberService.getMemberById(selectedSenderId);
+      if (s) {
+        senderName = s.fullName;
+      }
+    }
+
+    fellowshipService.sendFellowshipNote(
+      member.churchId || 'futamap',
+      selectedSenderId,
+      senderName,
+      memberId,
+      messageText.trim(),
+      'Encouragement'
+    );
+
+    setMessageText('');
+    loadDMs();
+    if (onUpdateMember) {
+      onUpdateMember();
+    }
+  };
+
   const [notes, setNotes] = useState<FollowUpNote[]>([
     {
       id: "en1",
@@ -298,8 +385,12 @@ export default function MemberProfileView({
                 <h2 className="text-xl font-bold text-slate-900 leading-tight">{member.fullName}</h2>
                 <p className="text-xs text-slate-400 font-medium mt-1">{member.mapName}</p>
               </div>
-              <div>
+              <div className="flex flex-wrap justify-center items-center gap-2">
                 <StatusBadge status={member.status} />
+                <span className="inline-flex items-center gap-1 text-[11px] font-black text-indigo-750 bg-indigo-50 border border-indigo-150 rounded-full px-2.5 py-1 shadow-2xs" title="Total active social connections!">
+                  <Flame className="w-3.5 h-3.5 text-indigo-500 fill-indigo-500 animate-pulse" />
+                  <span>{friendCount} {friendCount === 1 ? 'Connection' : 'Connections'}</span>
+                </span>
               </div>
 
               {/* Core Details list */}
@@ -322,6 +413,18 @@ export default function MemberProfileView({
                     Celebrated: <strong className="text-gray-900">{new Date(member.birthday).toLocaleDateString(undefined, { month: 'long', day: 'numeric' })}</strong>
                   </span>
                 </div>
+              </div>
+
+              {/* Send Direct Message CTA button */}
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsChatOpen(true)}
+                  className="w-full py-2.5 px-4 bg-indigo-650 hover:bg-indigo-700 text-white rounded-xl text-xs font-black tracking-wide transition-all flex items-center justify-center gap-1.5 shadow-sm hover:shadow-indigo-500/10 cursor-pointer"
+                >
+                  <MessageSquare className="w-4 h-4 shrink-0" />
+                  Send Message / Chat DMs
+                </button>
               </div>
             </div>
 
@@ -463,6 +566,136 @@ export default function MemberProfileView({
               )}
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* Messaging / Direct Chat Modal */}
+      {isChatOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 animate-fade-in">
+          <div className="bg-white w-full max-w-lg rounded-3xl border border-slate-100 shadow-2xl flex flex-col h-[520px] overflow-hidden animate-scale-up">
+            {/* Header */}
+            <div className="p-4.5 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-full bg-indigo-550 text-white flex items-center justify-center font-bold text-sm shrink-0">
+                  {member?.fullName.charAt(0)}
+                </div>
+                <div>
+                  <h3 className="text-xs font-black text-slate-900 leading-none mb-0.5">Fellowship Messenger</h3>
+                  <p className="text-[10px] text-slate-400 font-semibold leading-none mb-0">Direct line to <span className="text-indigo-600">{member?.fullName}</span> • 🤝 {friendCount} friends</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setIsChatOpen(false)}
+                className="p-1.5 hover:bg-slate-100 rounded-xl text-slate-400 hover:text-slate-700 transition-all cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Admin Selector Tip if viewing as administrator */}
+            {!currentMemberSess && (
+              <div className="bg-amber-50/70 border-b border-amber-100 px-4.5 py-2 flex items-center justify-between shrink-0 text-[10px] text-amber-805 gap-2">
+                <span className="font-medium flex items-center gap-1 shrink-0">
+                  <ShieldAlert className="w-3.5 h-3.5 text-amber-500" />
+                  No member login active. Simulated Sender:
+                </span>
+                <select
+                  value={selectedSenderId}
+                  onChange={(e) => setSelectedSenderId(e.target.value)}
+                  className="px-2 py-1 border border-amber-200 bg-white rounded-lg font-bold text-[10px] text-amber-900 outline-none max-w-[180px] truncate"
+                >
+                  <option value="admin_support">MAP Care Team (System)</option>
+                  {memberService.getMembers()
+                    .filter(m => m.id !== memberId)
+                    .map(m => (
+                      <option key={m.id} value={m.id}>{m.fullName}</option>
+                    ))
+                  }
+                </select>
+              </div>
+            )}
+
+            {/* Chat Body containing thread */}
+            <div className="flex-1 overflow-y-auto p-4.5 bg-slate-50/30 space-y-3.5 min-h-0">
+              {chatMessages.length === 0 ? (
+                <div className="h-full flex flex-col items-center justify-center text-center space-y-2 p-6">
+                  <div className="p-3 bg-indigo-50 border border-indigo-100 text-indigo-500 rounded-2xl">
+                    <MessageSquare className="w-6 h-6 animate-pulse" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-extrabold text-slate-800">No Messages Shared Yet</h4>
+                    <p className="text-[10px] text-slate-400 max-w-[240px] leading-relaxed mx-auto mt-0.5">
+                      Send a word of encouragement, prayer request, or virtual handshake to strengthen fellowship!
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                chatMessages.map((msg) => {
+                  const isSentByMe = msg.senderId === selectedSenderId;
+                  return (
+                    <div 
+                      key={msg.id} 
+                      className={`flex flex-col max-w-[85%] ${isSentByMe ? 'ml-auto items-end' : 'mr-auto items-start'}`}
+                    >
+                      <span className="text-[9px] text-slate-400 font-bold font-mono px-1 mb-0.5">
+                        {isSentByMe ? 'You' : msg.senderName}
+                      </span>
+                      <div className={`p-3 rounded-2xl leading-relaxed text-xs font-medium shadow-2xs ${
+                        isSentByMe 
+                          ? 'bg-indigo-600 border border-indigo-550 text-white rounded-br-none' 
+                          : 'bg-white border border-slate-205 text-slate-800 rounded-bl-none'
+                      }`}>
+                        {msg.message}
+                      </div>
+                      <span className="text-[8px] text-slate-400 font-semibold font-mono mt-0.5 px-1">
+                        {msg.theme && `🏷️ ${msg.theme} • `}{msg.dateSent}
+                      </span>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Quick Pills and Input Form */}
+            <div className="p-4.5 border-t border-slate-100 bg-white space-y-3 shrink-0">
+              {/* Quick Prompt Pills */}
+              <div className="flex flex-wrap gap-1.5">
+                {[
+                  { text: 'Standing in prayers with you!', theme: 'Prayer' },
+                  { text: 'Great checking in yesterday! How are you doing?', theme: 'Check-in' },
+                  { text: 'The Lord is your strength, brethren. Keep soaring!', theme: 'Encouragement' },
+                  { text: 'We missed you at the last MAP Fellowship!', theme: 'Check-in' }
+                ].map((pill, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => setMessageText(pill.text)}
+                    className="px-2.5 py-1 bg-slate-50 hover:bg-indigo-550 hover:text-white border border-slate-105 text-[10px] font-bold text-slate-650 rounded-full transition-all cursor-pointer"
+                  >
+                    {pill.text}
+                  </button>
+                ))}
+              </div>
+
+              {/* Message Typing Form */}
+              <form onSubmit={handleSendMessage} className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="Record note or type fellowship message..."
+                  value={messageText}
+                  onChange={(e) => setMessageText(e.target.value)}
+                  className="block w-full px-3.5 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50/30 focus:bg-white focus:ring-2 focus:ring-indigo-100 outline-none text-slate-850 font-medium"
+                />
+                <button
+                  type="submit"
+                  className="px-4.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1 cursor-pointer shrink-0"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  <span>Send</span>
+                </button>
+              </form>
+            </div>
           </div>
         </div>
       )}

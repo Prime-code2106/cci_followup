@@ -1,6 +1,7 @@
 import { Member } from '../types';
 import StatusBadge from './StatusBadge';
-import { Mail, Phone, Calendar, User } from 'lucide-react';
+import { Mail, Phone, Calendar, User, Flame } from 'lucide-react';
+import { fellowshipService } from '../services/fellowshipService';
 
 interface MemberTableProps {
   members: Member[];
@@ -29,7 +30,13 @@ export default function MemberTable({ members, onSelectMember }: MemberTableProp
             <div className="flex justify-between items-start">
               <div>
                 <h4 className="font-semibold text-gray-900 text-base">{member.fullName}</h4>
-                <p className="text-xs text-gray-400">{member.department} • {member.level}</p>
+                <p className="text-xs text-gray-400 flex items-center gap-1.5 flex-wrap">
+                  <span>{member.department} • {member.level}</span>
+                  <span className="inline-flex items-center gap-0.5 text-[10px] bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded-full font-bold">
+                    <Flame className="w-3 h-3 text-indigo-500 fill-indigo-500 animate-none shrink-0" />
+                    <span>{fellowshipService.getConnectedBrethren(member.churchId || 'futamap', member.id).length} Conn</span>
+                  </span>
+                </p>
               </div>
               <StatusBadge status={member.status} />
             </div>
@@ -97,8 +104,12 @@ export default function MemberTable({ members, onSelectMember }: MemberTableProp
                       {member.fullName.charAt(0)}{member.fullName.split(' ')[1]?.charAt(0) || ''}
                     </div>
                     <div className="ml-3">
-                      <div className="text-sm font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">
-                        {member.fullName}
+                      <div className="text-sm font-semibold text-gray-900 group-hover:text-blue-650 transition-colors flex items-center gap-1.5">
+                        <span>{member.fullName}</span>
+                        <span className="inline-flex items-center gap-0.5 text-[9px] bg-indigo-50 border border-indigo-150 text-indigo-700 px-1.5 py-0.2 rounded-full font-bold" title="Active connections count">
+                          <Flame className="w-2.5 h-2.5 text-indigo-505 fill-indigo-500 shrink-0 animate-pulse" />
+                          <span>{fellowshipService.getConnectedBrethren(member.churchId || 'futamap', member.id).length}</span>
+                        </span>
                       </div>
                       <div className="text-xs text-gray-400 font-medium">
                         {member.mapName}

@@ -1,4 +1,4 @@
-import { ArrowRight, Users, UserPlus, HeartHandshake, CalendarCheck, PhoneCall, Cake, Sparkles } from 'lucide-react';
+import { ArrowRight, Users, UserPlus, HeartHandshake, CalendarCheck, PhoneCall, Cake, Sparkles, QrCode } from 'lucide-react';
 
 interface LandingPageProps {
   onNavigate: (viewId: string) => void;
@@ -97,38 +97,49 @@ export default function LandingPage({ onNavigate, churchName, mapName, activeChu
           </p>
 
           {/* Call To Actions */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-3xl mx-auto pt-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 max-w-5xl mx-auto pt-6">
             <button
               onClick={() => onNavigate('register-member')}
-              className="flex items-center justify-between p-5 bg-white border border-gray-100 hover:border-blue-400 rounded-2xl shadow-xs hover:shadow-md transition-all text-left cursor-pointer group"
+              className="flex items-center justify-between p-5 bg-white border border-gray-100 hover:border-blue-440 rounded-2xl shadow-xs hover:shadow-md transition-all text-left cursor-pointer group"
             >
               <div>
                 <span className="block text-xs font-bold text-blue-600 uppercase tracking-widest mb-1">New Member</span>
-                <span className="block font-semibold text-slate-800 text-sm leading-tight">Register in Database</span>
+                <span className="block font-semibold text-slate-800 text-sm leading-tight">Register Profile</span>
               </div>
               <ArrowRight className="w-5 h-5 text-gray-450 group-hover:translate-x-1 group-hover:text-blue-600 transition-all" />
             </button>
 
             <button
               onClick={() => onNavigate('register-visitor')}
-              className="flex items-center justify-between p-5 bg-white border border-gray-100 hover:border-emerald-400 rounded-2xl shadow-xs hover:shadow-md transition-all text-left cursor-pointer group"
+              className="flex items-center justify-between p-5 bg-white border border-gray-100 hover:border-emerald-440 rounded-2xl shadow-xs hover:shadow-md transition-all text-left cursor-pointer group"
             >
               <div>
                 <span className="block text-xs font-bold text-emerald-600 uppercase tracking-widest mb-1">Visitor</span>
-                <span className="block font-semibold text-slate-800 text-sm leading-tight">First Time Visitor Form</span>
+                <span className="block font-semibold text-slate-800 text-sm leading-tight">First Timer Form</span>
               </div>
               <ArrowRight className="w-5 h-5 text-gray-450 group-hover:translate-x-1 group-hover:text-emerald-600 transition-all" />
             </button>
 
             <button
               onClick={() => onNavigate('prayer-request')}
-              className="flex items-center justify-between p-5 bg-white border border-gray-100 hover:border-amber-400 rounded-2xl shadow-xs hover:shadow-md transition-all text-left cursor-pointer group"
+              className="flex items-center justify-between p-5 bg-white border border-gray-100 hover:border-amber-440 rounded-2xl shadow-xs hover:shadow-md transition-all text-left cursor-pointer group"
             >
               <div>
                 <span className="block text-xs font-bold text-amber-600 uppercase tracking-widest mb-1">Intercession</span>
-                <span className="block font-semibold text-slate-800 text-sm leading-tight">Submit Prayer Request</span>
+                <span className="block font-semibold text-slate-800 text-sm leading-tight">Submit Request</span>
               </div>
               <ArrowRight className="w-5 h-5 text-gray-450 group-hover:translate-x-1 group-hover:text-amber-600 transition-all" />
+            </button>
+
+            <button
+              onClick={() => onNavigate('check-in')}
+              className="flex items-center justify-between p-5 bg-white border border-gray-100 hover:border-indigo-400 rounded-2xl shadow-xs hover:shadow-md transition-all text-left cursor-pointer group"
+            >
+              <div>
+                <span className="block text-xs font-bold text-indigo-600 uppercase tracking-widest mb-1">Attendance</span>
+                <span className="block font-semibold text-slate-800 text-sm leading-tight">Express Check-In</span>
+              </div>
+              <ArrowRight className="w-5 h-5 text-gray-450 group-hover:translate-x-1 group-hover:text-indigo-600 transition-all" />
             </button>
           </div>
         </div>

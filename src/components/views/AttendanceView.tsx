@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Member, Attendance, ServiceType } from '../../types';
 import { attendanceService } from '../../services/attendanceService';
-import { Calendar, CheckCircle2, Filter, Plus, ListFilter, HelpCircle, UserCheck } from 'lucide-react';
+import { Calendar, CheckCircle2, Filter, Plus, ListFilter, HelpCircle, UserCheck, QrCode, ExternalLink } from 'lucide-react';
 
 interface AttendanceViewProps {
   attendance: Attendance[];
@@ -116,9 +116,11 @@ export default function AttendanceView({
                 className="block w-full px-3 py-2 border border-gray-200 rounded-xl text-xs font-semibold focus:ring-blue-500 bg-white text-gray-850"
               >
                 <option value="Sunday Service">Sunday Service</option>
+                <option value="Midweek Service">Midweek Service</option>
                 <option value="Bible Study">Bible Study</option>
                 <option value="Prayer Meeting">Prayer Meeting</option>
                 <option value="MAP Meeting">MAP Meeting</option>
+                <option value="Special Program">Special Program</option>
               </select>
             </div>
 
@@ -142,6 +144,61 @@ export default function AttendanceView({
               Mark Checked-In
             </button>
           </form>
+        </div>
+
+        {/* Dynamic QR Code Generator for Services */}
+        <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-xs space-y-4">
+          <div className="border-b border-gray-100 pb-3 flex items-center space-x-2">
+            <QrCode className="w-5 h-5 text-indigo-600 animate-pulse" />
+            <h3 className="text-sm font-bold text-slate-900">Church QR Code Generator</h3>
+          </div>
+          
+          <p className="text-xs text-slate-500 leading-relaxed font-medium">
+            Project these QR codes in church or print them for the entrance. When scanned, they automatically detect the church, date, and service details.
+          </p>
+
+          <div className="p-4 bg-slate-50 dark:bg-slate-950/20 border rounded-2xl flex flex-col items-center text-center space-y-3 relative overflow-hidden">
+            <div className="w-28 h-28 bg-white border-4 border-slate-100 rounded-xl p-1 shadow flex items-center justify-center relative">
+              {/* SVG Mock of a real QR Code structure */}
+              <svg className="w-24 h-24 text-slate-905" viewBox="0 0 100 100" fill="currentColor">
+                <path d="M5,5 h25 v25 h-25 z M12,12 h11 v11 h-11 z" />
+                <path d="M70,5 h25 v25 h-25 z M77,12 h11 v11 h-11 z" />
+                <path d="M5,70 h25 v25 h-25 z M12,77 h11 v11 h-11 z" />
+                <path d="M45,45 h10 v10 h-10 z" />
+                {/* Random QR code pixels block */}
+                <path d="M40,5 h5 v5 h-5 z M50,15 h10 v5 h-10 z M65,10 h5 v15 h-5 z M5,40 h15 v5 h-15 z M25,45 h5 v10 h-5 z M15,55 h15 v5 h-15 z M70,40 h10 v10 h-10 z M85,50 h10 v5 h-10 z M75,60 h10 v10 h-10 z M40,75 h20 v5 h-20 z M55,85 h15 v10 h-15 z M80,80 h15 v5 h-15 z M45,65 h5 v5 h-5 z" />
+              </svg>
+              <div className="absolute inset-0 flex items-center justify-center bg-blue-105/90 opacity-0 hover:opacity-100 transition-opacity rounded-xl cursor-pointer">
+                <span className="text-[10px] font-black text-blue-700 uppercase bg-white px-2 py-1 rounded shadow">CCI Code</span>
+              </div>
+            </div>
+            
+            <div className="space-y-1">
+              <span className="text-[9px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full uppercase tracking-wider font-mono">
+                Active: {serviceType}
+              </span>
+              <span className="block text-xs font-bold text-slate-800">Dynamic Scan link URL</span>
+            </div>
+
+            <div className="grid grid-cols-1 gap-2 w-full pt-1">
+              <a
+                href={`?view=check-in&service=${encodeURIComponent(serviceType)}&date=${date}`}
+                onClick={(e) => {
+                  e.preventDefault();
+                  // Simulate scanning by manipulating the path and triggering a route reload
+                  window.history.pushState({}, '', `?view=check-in&service=${encodeURIComponent(serviceType)}&date=${date}`);
+                  window.dispatchEvent(new Event('popstate'));
+                }}
+                className="py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-[11px] rounded-xl flex items-center justify-center gap-1 shadow-xs transition-all cursor-pointer"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                Simulate QR Code Scan
+              </a>
+              <span className="text-[9px] text-slate-400 font-semibold font-mono">
+                Opens check-in page with parameters automatically filled
+              </span>
+            </div>
+          </div>
         </div>
 
         {/* History Register List */}

@@ -38,30 +38,32 @@ export default function Navbar({
 
       {/* Role Picker & Core Forms Quick Launcher */}
       <div className="flex items-center space-x-2 sm:space-x-4">
-        {/* Quick Forms Trigger (only show on Member or easily visible) */}
-        <div className="hidden md:flex items-center space-x-2 mr-2">
-          <button
-            onClick={() => onQuickNav('register-member')}
-            className="flex items-center text-xs font-semibold px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-all shadow-2xs border border-blue-100 cursor-pointer"
-          >
-            <User className="w-3.5 h-3.5 mr-1" />
-            Join MAP
-          </button>
-          <button
-            onClick={() => onQuickNav('register-visitor')}
-            className="flex items-center text-xs font-semibold px-3 py-1.5 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100 transition-all shadow-2xs border border-emerald-100 cursor-pointer"
-          >
-            <UserPlus className="w-3.5 h-3.5 mr-1" />
-            First-Timer
-          </button>
-          <button
-            onClick={() => onQuickNav('prayer-request')}
-            className="flex items-center text-xs font-semibold px-3 py-1.5 bg-amber-50 text-amber-600 rounded-lg hover:bg-amber-100 transition-all shadow-2xs border border-amber-100 cursor-pointer"
-          >
-            <HeartHandshake className="w-3.5 h-3.5 mr-1" />
-            Prayer Request
-          </button>
-        </div>
+        {/* Quick Forms Trigger (only show for Member) */}
+        {currentUserRole === 'Member' && (
+          <div className="hidden md:flex items-center space-x-2 mr-2">
+            <button
+              onClick={() => onQuickNav('register-member')}
+              className="flex items-center text-xs font-semibold px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-all shadow-2xs border border-blue-100 cursor-pointer"
+            >
+              <User className="w-3.5 h-3.5 mr-1" />
+              Join MAP
+            </button>
+            <button
+              onClick={() => onQuickNav('register-visitor')}
+              className="flex items-center text-xs font-semibold px-3 py-1.5 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100 transition-all shadow-2xs border border-emerald-100 cursor-pointer"
+            >
+              <UserPlus className="w-3.5 h-3.5 mr-1" />
+              First-Timer
+            </button>
+            <button
+              onClick={() => onQuickNav('prayer-request')}
+              className="flex items-center text-xs font-semibold px-3 py-1.5 bg-amber-50 text-amber-600 rounded-lg hover:bg-amber-100 transition-all shadow-2xs border border-amber-100 cursor-pointer"
+            >
+              <HeartHandshake className="w-3.5 h-3.5 mr-1" />
+              Prayer Request
+            </button>
+          </div>
+        )}
 
         {/* Dynamic Testing Tooltip indicator */}
         <div className="flex items-center space-x-1.5 px-3 py-1 bg-slate-50 border border-slate-100 rounded-xl">

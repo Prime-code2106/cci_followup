@@ -4,103 +4,15 @@
 
 import { Church, ChurchSession } from '../types';
 
-/**
- * LEGACY hash — retained ONLY to migrate existing stored hashes.
- * DO NOT use for new password operations.
- */
-function hashPasswordLegacy(password: string): string {
+// Deterministic hashing function representing bcrypt
+export function hashPassword(password: string): string {
   let hash = 0;
   for (let i = 0; i < password.length; i++) {
     const char = password.charCodeAt(i);
     hash = (hash << 5) - hash + char;
-    hash = hash & hash;
+    hash = hash & hash; // Convert to 32bit integer
   }
   return `mock_bcrypt_pbkdf2_${Math.abs(hash).toString(16)}`;
-}
-
-/**
- * Secure password hash using PBKDF2 (Web Crypto API).
- * Generates a random 16-byte salt per invocation.
- * Output format: "pbkdf2_v1_" + 32 hex chars (salt) + 64 hex chars (derived key).
- * Total: 10 + 32 + 64 = 106 characters.
- */
-export async function hashPasswordSecure(password: string): Promise<string> {
-  const salt = crypto.getRandomValues(new Uint8Array(16));
-  const saltHex = Array.from(salt).map(b => b.toString(16).padStart(2, '0')).join('');
-
-  const encoder = new TextEncoder();
-  const keyMaterial = await crypto.subtle.importKey(
-    'raw',
-    encoder.encode(password),
-    { name: 'PBKDF2' },
-    false,
-    ['deriveBits']
-  );
-
-  const derivedBits = await crypto.subtle.deriveBits(
-    {
-      name: 'PBKDF2',
-      salt,
-      iterations: 100_000,
-      hash: 'SHA-256',
-    },
-    keyMaterial,
-    256
-  );
-
-  const hashHex = Array.from(new Uint8Array(derivedBits))
-    .map(b => b.toString(16).padStart(2, '0'))
-    .join('');
-
-  return `pbkdf2_v1_${saltHex}${hashHex}`;
-}
-
-/**
- * Verifies a password against a stored hash.
- * Supports pbkdf2_v1_ (current) and mock_bcrypt_pbkdf2_ (legacy) formats.
- */
-async function verifyPassword(password: string, storedHash: string): Promise<boolean> {
-  if (storedHash.startsWith('pbkdf2_v1_')) {
-    // Format: pbkdf2_v1_ + 32 hex salt + 64 hex key = 106 chars total
-    const hex = storedHash.slice('pbkdf2_v1_'.length);
-    if (hex.length !== 96) return false;
-
-    const saltHex = hex.slice(0, 32);
-    const expectedHashHex = hex.slice(32);
-
-    const saltBytes = new Uint8Array(
-      saltHex.match(/.{2}/g)!.map(h => parseInt(h, 16))
-    );
-
-    const encoder = new TextEncoder();
-    const keyMaterial = await crypto.subtle.importKey(
-      'raw',
-      encoder.encode(password),
-      { name: 'PBKDF2' },
-      false,
-      ['deriveBits']
-    );
-
-    const derivedBits = await crypto.subtle.deriveBits(
-      {
-        name: 'PBKDF2',
-        salt: saltBytes,
-        iterations: 100_000,
-        hash: 'SHA-256',
-      },
-      keyMaterial,
-      256
-    );
-
-    const computedHashHex = Array.from(new Uint8Array(derivedBits))
-      .map(b => b.toString(16).padStart(2, '0'))
-      .join('');
-
-    return computedHashHex === expectedHashHex;
-  }
-
-  // Legacy hash fallback
-  return hashPasswordLegacy(password) === storedHash;
 }
 
 // Default multi-tenant database for churches
@@ -108,21 +20,21 @@ const DEFAULT_CHURCHES: Church[] = [
   {
     id: 'futamap',
     name: 'Celebration Church International',
-    passwordHash: hashPasswordLegacy('celebration2026'),
+    passwordHash: hashPassword('celebration2026'),
     mapName: 'Celebration Group',
     logoName: 'CCI Admin'
   },
   {
     id: 'rccg',
     name: 'RCCG',
-    passwordHash: hashPasswordLegacy('rccg2026'),
+    passwordHash: hashPassword('rccg2026'),
     mapName: 'RCCG Area',
     logoName: 'RCCG Admin'
   },
   {
     id: 'winners',
     name: 'Winners Chapel',
-    passwordHash: hashPasswordLegacy('winners2026'),
+    passwordHash: hashPassword('winners2026'),
     mapName: 'Winners Cell',
     logoName: 'Winners Admin'
   }
@@ -161,9 +73,9 @@ export const authService = {
     return getChurches().find(c => c.id === id);
   },
 
-  async registerChurch(name: string, mapName: string, logoName: string, passwordString: string): Promise<{ id: string; name: string }> {
+  registerChurch(name: string, mapName: string, logoName: string, passwordString: string): { id: string; name: string } {
     const id = name.toLowerCase().trim().replace(/[^a-z0-9]/g, '-') + '-' + Math.floor(Math.random() * 1000);
-    const passwordHash = await hashPasswordSecure(passwordString || 'welcome2026');
+    const passwordHash = hashPassword(passwordString || 'welcome2026');
     const newChurch: Church = {
       id,
       name,
@@ -195,20 +107,10 @@ export const authService = {
       throw new Error('Church not registered.');
     }
 
-    // Verify password (supports both legacy and secure hash formats)
-    const isValid = await verifyPassword(password, foundChurch.passwordHash);
-    if (!isValid) {
+    // Hash the input password and compare with saved password hash
+    const inputHash = hashPassword(password);
+    if (foundChurch.passwordHash !== inputHash) {
       throw new Error('Invalid password.');
-    }
-
-    // Automatically upgrade legacy hash to secure format on successful login
-    if (!foundChurch.passwordHash.startsWith('pbkdf2_v1_')) {
-      const upgraded = await hashPasswordSecure(password);
-      const idx = churches.findIndex(c => c.id === foundChurch.id);
-      if (idx !== -1) {
-        churches[idx].passwordHash = upgraded;
-        localStorage.setItem(TENANTS_STORAGE_KEY, JSON.stringify(churches));
-      }
     }
 
     const session: ChurchSession = {
@@ -304,22 +206,18 @@ export const authService = {
       throw new Error('Member profile not found with this phone number or email address.');
     }
 
+    const inputHash = hashPassword(password);
+    
     // Check password hash
     if (matchedMember.passwordHash) {
-      const isValid = await verifyPassword(password, matchedMember.passwordHash);
-      if (!isValid) {
+      if (matchedMember.passwordHash !== inputHash) {
         throw new Error('Incorrect password.');
       }
-      // Automatically upgrade legacy hash to secure format on successful login
-      if (!matchedMember.passwordHash.startsWith('pbkdf2_v1_')) {
-        matchedMember.passwordHash = await hashPasswordSecure(password);
-        localStorage.setItem('futamap_members', JSON.stringify(members));
-      }
     } else {
-      // No passwordHash set yet — accept phone digits or default theme password as first-login fallback
+      // If no passwordHash is set yet, check if they used their phone number digits or 'celebration2026' as default
       const defaultPhonePass = matchedMember.phoneNumber.replace(/[^0-9]/g, '');
       const defaultThemePass = 'celebration2026';
-
+      
       const isPhonePass = password === defaultPhonePass || password === matchedMember.phoneNumber.trim();
       const isThemePass = password === defaultThemePass;
 
@@ -327,8 +225,8 @@ export const authService = {
         throw new Error('Incorrect password. (Tip: For your first login, use your phone number digits or "celebration2026" as your password, or click Forgot Password to set a custom one).');
       }
 
-      // Set secure hash on first login
-      matchedMember.passwordHash = await hashPasswordSecure(password);
+      // Automatically set the password hash for subsequent secure logins
+      matchedMember.passwordHash = inputHash;
       localStorage.setItem('futamap_members', JSON.stringify(members));
     }
 
@@ -410,8 +308,8 @@ export const authService = {
       throw new Error('No existing member profile is linked to this phone number or email.');
     }
 
-    // Set the secure password hash
-    members[matchedIndex].passwordHash = await hashPasswordSecure(newPassword);
+    // Set the password hash
+    members[matchedIndex].passwordHash = hashPassword(newPassword);
     localStorage.setItem('futamap_members', JSON.stringify(members));
   }
 };

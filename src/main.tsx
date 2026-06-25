@@ -2,12 +2,6 @@ import {StrictMode} from 'react';
 import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
-import { testSupabaseConnection } from './lib/testSupabaseConnection';
-
-// Test Supabase connection in development mode
-if (import.meta.env.DEV) {
-  testSupabaseConnection().catch(console.error);
-}
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

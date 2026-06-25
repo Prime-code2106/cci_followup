@@ -15,6 +15,10 @@ export interface Member {
   mapName: string; // For MAP association, e.g. "MAP Alpha", "MAP Omega"
   passwordHash?: string; // Authenticated portal access
   profilePicture?: string; // Upload link or symbol
+  bio?: string;
+  interests?: string[];
+  ministryInvolvement?: string[];
+  socialVisibilityOptIn?: boolean;
 }
 
 export interface Visitor {
@@ -29,7 +33,7 @@ export interface Visitor {
   status: 'Pending' | 'Contacted' | 'Integrated';
 }
 
-export type ServiceType = 'Sunday Service' | 'Bible Study' | 'Prayer Meeting' | 'MAP Meeting';
+export type ServiceType = 'Sunday Service' | 'Bible Study' | 'Prayer Meeting' | 'MAP Meeting' | 'Midweek Service' | 'Special Program';
 
 export interface Attendance {
   id: string;
@@ -107,6 +111,26 @@ export interface BirthdayReminder {
   birthday: string; // MM-DD or YYYY-MM-DD
   daysRemaining: number;
   isToday: boolean;
+}
+
+export interface FellowshipConnection {
+  id: string;
+  churchId?: string;
+  senderId: string;
+  receiverId: string;
+  status: 'pending' | 'connected';
+  dateRequested: string; // YYYY-MM-DD
+}
+
+export interface FellowshipNote {
+  id: string;
+  churchId?: string;
+  senderId: string;
+  senderName: string;
+  receiverId: string;
+  message: string;
+  dateSent: string; // YYYY-MM-DD
+  theme?: 'Prayer' | 'Encouragement' | 'Salutation' | 'Check-in';
 }
 
 export interface ChurchEvent {

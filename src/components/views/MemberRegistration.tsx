@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { memberService } from '../../services/memberService';
-import { authService, hashPasswordSecure } from '../../services/authService';
+import { authService, hashPassword } from '../../services/authService';
 import { CheckCircle2, User, Phone, BookOpen, GraduationCap, Building, MapPin, Calendar, Mail, Sparkles, ArrowLeft, Building2, Lock, Eye, EyeOff } from 'lucide-react';
 
 interface MemberRegistrationProps {
@@ -58,21 +58,21 @@ export default function MemberRegistration({ onBackToPortal, mapName: propMapNam
   const selectedChurchDetails = registeredChurches.find(c => c.id === formData.churchId);
   const activeMapName = selectedChurchDetails ? selectedChurchDetails.mapName : 'MAP Alpha';
 
-  const handleAddNewChurchSubmit = async () => {
+  const handleAddNewChurchSubmit = () => {
     if (!newChurchName.trim()) {
       setChurchError('Church name is required.');
       return;
     }
     try {
-      const created = await authService.registerChurch(
-        newChurchName.trim(),
+      const created = authService.registerChurch(
+        newChurchName.trim(), 
         newChurchMapName.trim() || `${newChurchName.trim()} Group`,
-        '',
+        '', 
         'welcome2026'
       );
       const updatedList = authService.getChurchesList();
       setRegisteredChurches(updatedList);
-
+      
       setFormData(prev => ({ ...prev, churchId: created.id }));
       setIsAddingNewChurch(false);
       setNewChurchName('');
@@ -117,51 +117,51 @@ export default function MemberRegistration({ onBackToPortal, mapName: propMapNam
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!validate()) return;
 
     setIsSubmitting(true);
 
-    try {
-      await new Promise(resolve => setTimeout(resolve, 600));
-      const passwordHash = await hashPasswordSecure(formData.password);
-      memberService.addMember({
-        fullName: formData.fullName,
-        phoneNumber: formData.phoneNumber,
-        gender: formData.gender,
-        department: formData.department,
-        level: formData.level,
-        faculty: formData.faculty || "Sciences",
-        residence: formData.residence || "FUTA Off-Campus",
-        birthday: formData.birthday,
-        dateJoined: formData.dateJoined,
-        email: formData.email,
-        mapName: activeMapName,
-        passwordHash
-      }, formData.churchId);
-
-      setIsSuccess(true);
-      // Reset form but preserve churchId for consecutive edits
-      setFormData(prev => ({
-        ...prev,
-        fullName: '',
-        phoneNumber: '',
-        gender: 'Male',
-        department: '',
-        level: '100 Level',
-        faculty: '',
-        residence: '',
-        birthday: '',
-        dateJoined: new Date().toISOString().split('T')[0],
-        email: '',
-        password: '',
-      }));
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setIsSubmitting(false);
-    }
+    setTimeout(() => {
+      try {
+        memberService.addMember({
+          fullName: formData.fullName,
+          phoneNumber: formData.phoneNumber,
+          gender: formData.gender,
+          department: formData.department,
+          level: formData.level,
+          faculty: formData.faculty || "Sciences",
+          residence: formData.residence || "FUTA Off-Campus",
+          birthday: formData.birthday,
+          dateJoined: formData.dateJoined,
+          email: formData.email,
+          mapName: activeMapName,
+          passwordHash: hashPassword(formData.password)
+        }, formData.churchId);
+        
+        setIsSuccess(true);
+        // Reset form but preserve churchId for consecutive edits
+        setFormData(prev => ({
+          ...prev,
+          fullName: '',
+          phoneNumber: '',
+          gender: 'Male',
+          department: '',
+          level: '100 Level',
+          faculty: '',
+          residence: '',
+          birthday: '',
+          dateJoined: new Date().toISOString().split('T')[0],
+          email: '',
+          password: '',
+        }));
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setIsSubmitting(false);
+      }
+    }, 600);
   };
 
   return (

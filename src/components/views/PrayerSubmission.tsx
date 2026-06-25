@@ -34,21 +34,21 @@ export default function PrayerSubmission({ onBackToPortal, mapName: propMapName,
   const selectedChurchDetails = registeredChurches.find(c => c.id === formData.churchId);
   const activeMapName = selectedChurchDetails ? selectedChurchDetails.mapName : 'MAP Alpha';
 
-  const handleAddNewChurchSubmit = async () => {
+  const handleAddNewChurchSubmit = () => {
     if (!newChurchName.trim()) {
       setChurchError('Church name is required.');
       return;
     }
     try {
-      const created = await authService.registerChurch(
-        newChurchName.trim(),
+      const created = authService.registerChurch(
+        newChurchName.trim(), 
         newChurchMapName.trim() || `${newChurchName.trim()} Group`,
-        '',
+        '', 
         'welcome2026'
       );
       const updatedList = authService.getChurchesList();
       setRegisteredChurches(updatedList);
-
+      
       setFormData(prev => ({ ...prev, churchId: created.id }));
       setIsAddingNewChurch(false);
       setNewChurchName('');
