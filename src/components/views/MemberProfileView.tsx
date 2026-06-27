@@ -133,20 +133,19 @@ export default function MemberProfileView({
     }
   };
 
-  const [notes, setNotes] = useState<FollowUpNote[]>([
-    {
-      id: "en1",
-      date: "2026-06-14",
-      text: "Samuel shared that he is getting ready for examinations. He is doing well spiritually.",
-      author: "MAP Leader"
-    },
-    {
-      id: "en2",
-      date: "2026-05-10",
-      text: "Offered advice on time management for final year academics.",
-      author: "Admin"
+  const [notes, setNotes] = useState<FollowUpNote[]>(() => {
+    const stored = localStorage.getItem(`member_notes_${memberId}`);
+    if (stored) {
+      try {
+        return JSON.parse(stored);
+      } catch {}
     }
-  ]);
+    return [];
+  });
+
+  useEffect(() => {
+    localStorage.setItem(`member_notes_${memberId}`, JSON.stringify(notes));
+  }, [notes, memberId]);
 
   // Form State for Editing
   const [editForm, setEditForm] = useState({

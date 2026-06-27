@@ -59,6 +59,7 @@ export default function MemberDashboardView({ memberId, onLogout, attendanceHist
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [profileSuccess, setProfileSuccess] = useState('');
   const [profileError, setProfileError] = useState('');
+  const [remarks, setRemarks] = useState('');
 
   // Sample Upcoming Events
   const events: ChurchEvent[] = [
@@ -159,6 +160,23 @@ export default function MemberDashboardView({ memberId, onLogout, attendanceHist
         !pendingIncomingUserIds.includes(m.id)
       );
       setDiscoverableMembers(discoverable);
+
+      // Load latest Care note dynamically
+      const storedNotes = localStorage.getItem(`member_notes_${mem.id}`);
+      if (storedNotes) {
+        try {
+          const parsed = JSON.parse(storedNotes);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setRemarks(parsed[parsed.length - 1].text);
+          } else {
+            setRemarks('');
+          }
+        } catch {
+          setRemarks('');
+        }
+      } else {
+        setRemarks('');
+      }
     }
   };
 
@@ -378,10 +396,10 @@ export default function MemberDashboardView({ memberId, onLogout, attendanceHist
           </div>
 
           {/* Quick tab toggle bar */}
-          <div className="flex flex-wrap gap-1 bg-slate-100 p-1 rounded-2xl w-full md:w-auto relative z-10">
+          <div className="flex overflow-x-auto md:overflow-visible scrollbar-none gap-1 bg-slate-100 p-1 rounded-2xl w-full md:w-auto relative z-10 whitespace-nowrap">
             <button
               onClick={() => setActiveTab('dashboard')}
-              className={`flex-1 sm:flex-auto px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              className={`flex-1 md:flex-initial shrink-0 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 activeTab === 'dashboard' ? 'bg-white text-blue-600 shadow-xs' : 'text-slate-500 hover:text-slate-800'
               }`}
             >
@@ -389,7 +407,7 @@ export default function MemberDashboardView({ memberId, onLogout, attendanceHist
             </button>
             <button
               onClick={() => setActiveTab('prayers')}
-              className={`flex-1 sm:flex-auto px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              className={`flex-1 md:flex-initial shrink-0 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 activeTab === 'prayers' ? 'bg-white text-blue-600 shadow-xs' : 'text-slate-500 hover:text-slate-800'
               }`}
             >
@@ -397,7 +415,7 @@ export default function MemberDashboardView({ memberId, onLogout, attendanceHist
             </button>
             <button
               onClick={() => setActiveTab('profile')}
-              className={`flex-1 sm:flex-auto px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              className={`flex-1 md:flex-initial shrink-0 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 activeTab === 'profile' ? 'bg-white text-blue-600 shadow-xs' : 'text-slate-500 hover:text-slate-800'
               }`}
             >
@@ -405,7 +423,7 @@ export default function MemberDashboardView({ memberId, onLogout, attendanceHist
             </button>
             <button
               onClick={() => setActiveTab('events')}
-              className={`flex-1 sm:flex-auto px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              className={`flex-1 md:flex-initial shrink-0 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 activeTab === 'events' ? 'bg-white text-blue-600 shadow-xs' : 'text-slate-500 hover:text-slate-800'
               }`}
             >
@@ -413,7 +431,7 @@ export default function MemberDashboardView({ memberId, onLogout, attendanceHist
             </button>
             <button
               onClick={() => setActiveTab('fellowship')}
-              className={`flex-1 sm:flex-auto px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+              className={`flex-1 md:flex-initial shrink-0 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
                 activeTab === 'fellowship' ? 'bg-white text-blue-600 shadow-xs' : 'text-slate-500 hover:text-slate-800'
               }`}
             >
@@ -548,16 +566,16 @@ export default function MemberDashboardView({ memberId, onLogout, attendanceHist
                 </div>
 
                 {/* Stats grid */}
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="p-4 bg-teal-50 border border-teal-100 rounded-2xl text-center">
+                <div className="grid grid-cols-1 xs:grid-cols-3 gap-2 xs:gap-3">
+                  <div className="p-2.5 xs:p-4 bg-teal-50 border border-teal-100 rounded-2xl text-center">
                     <span className="block text-2xl font-black text-teal-600">{sunServicesCount}</span>
                     <span className="block text-[10px] text-teal-700 font-bold uppercase tracking-wider mt-0.5">Sunday Services</span>
                   </div>
-                  <div className="p-4 bg-purple-50 border border-purple-100 rounded-2xl text-center">
+                  <div className="p-2.5 xs:p-4 bg-purple-50 border border-purple-100 rounded-2xl text-center">
                     <span className="block text-2xl font-black text-purple-600">{midweekCount}</span>
                     <span className="block text-[10px] text-purple-700 font-bold uppercase tracking-wider mt-0.5">Midweek Meetings</span>
                   </div>
-                  <div className="p-4 bg-amber-50 border border-amber-100 rounded-2xl text-center">
+                  <div className="p-2.5 xs:p-4 bg-amber-50 border border-amber-100 rounded-2xl text-center">
                     <span className="block text-2xl font-black text-amber-600">{prayerMeetCount}</span>
                     <span className="block text-[10px] text-amber-700 font-bold uppercase tracking-wider mt-0.5">Prayer Gatherings</span>
                   </div>
@@ -617,7 +635,7 @@ export default function MemberDashboardView({ memberId, onLogout, attendanceHist
                   <span className="font-bold text-sm tracking-wide uppercase text-white">Leadership Care Remarks</span>
                 </div>
                 <p className="text-xs text-slate-400 font-mono leading-relaxed bg-slate-950 p-4 rounded-xl border border-slate-800">
-                  "Samuel is currently active in the Believers Academy. Continue supporting him with materials and prayer. He has a promising call."
+                  {remarks ? `"${remarks}"` : `"No leadership care remarks or developmental notes logged yet by your coordinators."`}
                 </p>
                 <div className="flex items-center space-x-1 text-[9px] text-slate-500 font-medium">
                   <Info className="w-3.5 h-3.5 shrink-0" />
@@ -1429,7 +1447,7 @@ export default function MemberDashboardView({ memberId, onLogout, attendanceHist
                     <form onSubmit={handleSendNote} className="space-y-4">
                       <div className="space-y-1.5">
                         <label className="block text-[9px] font-bold text-gray-400 uppercase tracking-widest">Select Theme Category</label>
-                        <div className="grid grid-cols-4 gap-1.5">
+                        <div className="grid grid-cols-2 xs:grid-cols-4 gap-1.5">
                           {(['Encouragement', 'Prayer', 'Salutation', 'Check-in'] as const).map((theme) => (
                             <button
                               key={theme}

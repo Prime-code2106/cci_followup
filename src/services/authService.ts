@@ -1,10 +1,8 @@
-// Future Supabase Auth integration here.
-// In Supabase, we would import { createClient } from '@supabase/supabase-low-level-sdk'
-// and perform client.auth.signInWithPassword or similar custom session routing.
+// Client auth service powered by PostgreSQL server-side routes.
 
 import { Church, ChurchSession } from '../types';
 
-// Deterministic hashing function representing bcrypt
+// Deterministic hashing function representing bcrypt (same as server-side)
 export function hashPassword(password: string): string {
   let hash = 0;
   for (let i = 0; i < password.length; i++) {
@@ -15,53 +13,36 @@ export function hashPassword(password: string): string {
   return `mock_bcrypt_pbkdf2_${Math.abs(hash).toString(16)}`;
 }
 
-// Default multi-tenant database for churches
-const DEFAULT_CHURCHES: Church[] = [
-  {
-    id: 'futamap',
-    name: 'Celebration Church International',
-    passwordHash: hashPassword('celebration2026'),
-    mapName: 'Celebration Group',
-    logoName: 'CCI Admin'
-  },
-  {
-    id: 'rccg',
-    name: 'RCCG',
-    passwordHash: hashPassword('rccg2026'),
-    mapName: 'RCCG Area',
-    logoName: 'RCCG Admin'
-  },
-  {
-    id: 'winners',
-    name: 'Winners Chapel',
-    passwordHash: hashPassword('winners2026'),
-    mapName: 'Winners Cell',
-    logoName: 'Winners Admin'
-  }
-];
-
 const TENANTS_STORAGE_KEY = 'futamap_saas_tenants';
 const SESSION_STORAGE_KEY = 'futamap_saas_session';
+const MEMBER_SESSION_STORAGE_KEY = 'futamap_saas_member_session';
 
-// Initialize the tenant registry once
+// Synchronizes the tenant registry from our server to LocalStorage
+export async function syncChurches(): Promise<void> {
+  try {
+    const res = await fetch('/api/churches');
+    if (res.ok) {
+      const data = await res.json();
+      localStorage.setItem(TENANTS_STORAGE_KEY, JSON.stringify(data));
+    }
+  } catch (err) {
+    console.error('Failed to sync churches from backend:', err);
+  }
+}
+
+// Proactive trigger to sync on load
+syncChurches();
+
 function getChurches(): Church[] {
   const stored = localStorage.getItem(TENANTS_STORAGE_KEY);
   if (stored) {
     try {
-      const parsed = JSON.parse(stored);
-      // Migrate tenant record if "FUTA MAP" still exists in active storage
-      const hasFuta = parsed.some((c: any) => c.name === 'FUTA MAP');
-      if (hasFuta) {
-        localStorage.setItem(TENANTS_STORAGE_KEY, JSON.stringify(DEFAULT_CHURCHES));
-        return DEFAULT_CHURCHES;
-      }
-      return parsed;
-    } catch (e) {
-      console.error('Error fetching tenants', e);
+      return JSON.parse(stored);
+    } catch {
+      // Fallback
     }
   }
-  localStorage.setItem(TENANTS_STORAGE_KEY, JSON.stringify(DEFAULT_CHURCHES));
-  return DEFAULT_CHURCHES;
+  return [];
 }
 
 export const authService = {
@@ -73,69 +54,49 @@ export const authService = {
     return getChurches().find(c => c.id === id);
   },
 
-  registerChurch(name: string, mapName: string, logoName: string, passwordString: string): { id: string; name: string } {
+  async registerChurch(name: string, mapName: string, logoName: string, passwordString: string): Promise<{ id: string; name: string }> {
     const id = name.toLowerCase().trim().replace(/[^a-z0-9]/g, '-') + '-' + Math.floor(Math.random() * 1000);
     const passwordHash = hashPassword(passwordString || 'welcome2026');
-    const newChurch: Church = {
-      id,
-      name,
-      mapName,
-      logoName: logoName || `${name} Admin`,
-      passwordHash
-    };
-    const current = getChurches();
-    if (current.some(c => c.name.toLowerCase().trim() === name.toLowerCase().trim())) {
-      throw new Error('A church with this name is already registered.');
+
+    const res = await fetch('/api/churches', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, name, mapName, logoName: logoName || `${name} Admin`, passwordHash })
+    });
+
+    if (!res.ok) {
+      const errData = await res.json();
+      throw new Error(errData.error || 'A church with this name is already registered.');
     }
-    const updated = [...current, newChurch];
-    localStorage.setItem(TENANTS_STORAGE_KEY, JSON.stringify(updated));
+
+    // Refresh memory cache
+    await syncChurches();
+
     return { id, name };
   },
 
   async login(churchName: string, password: string, rememberMe = false): Promise<ChurchSession> {
-    // Artificial latency for a premium loading feel
-    await new Promise(resolve => setTimeout(resolve, 800));
+    const passwordHash = hashPassword(password);
 
-    const churches = getChurches();
-    
-    // Check case-insensitive match for church name
-    const foundChurch = churches.find(
-      c => c.name.toLowerCase().trim() === churchName.toLowerCase().trim()
-    );
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ churchName, passwordHash })
+    });
 
-    if (!foundChurch) {
-      throw new Error('Church not registered.');
+    if (!res.ok) {
+      const errData = await res.json();
+      throw new Error(errData.error || 'Login failed.');
     }
 
-    // Hash the input password and compare with saved password hash
-    const inputHash = hashPassword(password);
-    if (foundChurch.passwordHash !== inputHash) {
-      throw new Error('Invalid password.');
-    }
+    const session: ChurchSession = await res.json();
 
-    const session: ChurchSession = {
-      churchId: foundChurch.id,
-      churchName: foundChurch.name,
-      mapName: foundChurch.mapName,
-      logoName: foundChurch.logoName,
-      authenticatedAt: new Date().toISOString()
-    };
-
-    // Session persistence
     const sessionStr = JSON.stringify(session);
     if (rememberMe) {
       localStorage.setItem(SESSION_STORAGE_KEY, sessionStr);
     } else {
       sessionStorage.setItem(SESSION_STORAGE_KEY, sessionStr);
     }
-
-    // Future Supabase Auth integration:
-    // const { data, error } = await supabase.auth.signInWithPassword({
-    //   email: `${foundChurch.id}@church-tenant.futamap.com`,
-    //   password: password
-    // });
-    // if (error) throw error;
-    // return data.session;
 
     return session;
   },
@@ -169,78 +130,25 @@ export const authService = {
   logout(): void {
     localStorage.removeItem(SESSION_STORAGE_KEY);
     sessionStorage.removeItem(SESSION_STORAGE_KEY);
-    
-    // Future Supabase Auth integration:
-    // supabase.auth.signOut();
   },
 
   async memberLogin(emailOrPhone: string, password: string, rememberMe = false): Promise<any> {
-    await new Promise(resolve => setTimeout(resolve, 800)); // elite premium transition delay
+    const passwordHash = hashPassword(password);
 
-    const membersStr = localStorage.getItem('futamap_members');
-    if (!membersStr) {
-      throw new Error('No registered members found. Please contact administration or register first.');
-    }
-
-    let members: any[] = [];
-    try {
-      members = JSON.parse(membersStr);
-    } catch {
-      throw new Error('Error processing members directory.');
-    }
-
-    const cleanInput = emailOrPhone.toLowerCase().trim().replace(/[\s\-\+\(\)]/g, '');
-
-    // Match by email or clean phone matches
-    const matchedMember = members.find(m => {
-      const dbEmail = m.email ? m.email.toLowerCase().trim() : '';
-      const dbPhoneClean = m.phoneNumber.replace(/[\s\-\+\(\)]/g, '');
-      
-      const isEmailMatch = m.email && dbEmail === emailOrPhone.toLowerCase().trim();
-      const isPhoneMatch = dbPhoneClean.endsWith(cleanInput) || cleanInput.endsWith(dbPhoneClean);
-      
-      return isEmailMatch || isPhoneMatch;
+    const res = await fetch('/api/auth/member-login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ emailOrPhone, passwordHash, rawPassword: password })
     });
 
-    if (!matchedMember) {
-      throw new Error('Member profile not found with this phone number or email address.');
+    if (!res.ok) {
+      const errData = await res.json();
+      throw new Error(errData.error || 'Authentication failed.');
     }
 
-    const inputHash = hashPassword(password);
-    
-    // Check password hash
-    if (matchedMember.passwordHash) {
-      if (matchedMember.passwordHash !== inputHash) {
-        throw new Error('Incorrect password.');
-      }
-    } else {
-      // If no passwordHash is set yet, check if they used their phone number digits or 'celebration2026' as default
-      const defaultPhonePass = matchedMember.phoneNumber.replace(/[^0-9]/g, '');
-      const defaultThemePass = 'celebration2026';
-      
-      const isPhonePass = password === defaultPhonePass || password === matchedMember.phoneNumber.trim();
-      const isThemePass = password === defaultThemePass;
-
-      if (!isPhonePass && !isThemePass) {
-        throw new Error('Incorrect password. (Tip: For your first login, use your phone number digits or "celebration2026" as your password, or click Forgot Password to set a custom one).');
-      }
-
-      // Automatically set the password hash for subsequent secure logins
-      matchedMember.passwordHash = inputHash;
-      localStorage.setItem('futamap_members', JSON.stringify(members));
-    }
-
-    const memberSession = {
-      memberId: matchedMember.id,
-      fullName: matchedMember.fullName,
-      churchId: matchedMember.churchId || 'futamap',
-      phoneNumber: matchedMember.phoneNumber,
-      email: matchedMember.email,
-      authenticatedAt: new Date().toISOString()
-    };
+    const memberSession = await res.json();
 
     const sessionStr = JSON.stringify(memberSession);
-    const MEMBER_SESSION_STORAGE_KEY = 'futamap_saas_member_session';
     if (rememberMe) {
       localStorage.setItem(MEMBER_SESSION_STORAGE_KEY, sessionStr);
     } else {
@@ -251,7 +159,6 @@ export const authService = {
   },
 
   getCurrentMemberSession(): any | null {
-    const MEMBER_SESSION_STORAGE_KEY = 'futamap_saas_member_session';
     const sessionLocal = localStorage.getItem(MEMBER_SESSION_STORAGE_KEY);
     if (sessionLocal) {
       try {
@@ -274,29 +181,22 @@ export const authService = {
   },
 
   logoutMember(): void {
-    const MEMBER_SESSION_STORAGE_KEY = 'futamap_saas_member_session';
     localStorage.removeItem(MEMBER_SESSION_STORAGE_KEY);
     sessionStorage.removeItem(MEMBER_SESSION_STORAGE_KEY);
   },
 
   async resetMemberPassword(emailOrPhone: string, newPassword: string): Promise<void> {
-    await new Promise(resolve => setTimeout(resolve, 1000)); // Reset action artificial load delay
+    const passwordHash = hashPassword(newPassword);
 
-    const membersStr = localStorage.getItem('futamap_members');
-    if (!membersStr) {
-      throw new Error('No registered members found in the system database.');
-    }
+    // To reset, we find the member, then update their password hash
+    // We can do a fetch to members list, find the match, then issue a PUT
+    const membersRes = await fetch('/api/members');
+    if (!membersRes.ok) throw new Error('Failed to retrieve system profiles.');
 
-    let members: any[] = [];
-    try {
-      members = JSON.parse(membersStr);
-    } catch {
-      throw new Error('Error processing members list.');
-    }
-
+    const allMembers: any[] = await membersRes.json();
     const cleanInput = emailOrPhone.toLowerCase().trim().replace(/[\s\-\+\(\)]/g, '');
 
-    const matchedIndex = members.findIndex(m => {
+    const matched = allMembers.find(m => {
       const dbEmail = m.email ? m.email.toLowerCase().trim() : '';
       const dbPhoneClean = m.phoneNumber.replace(/[\s\-\+\(\)]/g, '');
       const isEmailMatch = m.email && dbEmail === emailOrPhone.toLowerCase().trim();
@@ -304,12 +204,18 @@ export const authService = {
       return isEmailMatch || isPhoneMatch;
     });
 
-    if (matchedIndex === -1) {
+    if (!matched) {
       throw new Error('No existing member profile is linked to this phone number or email.');
     }
 
-    // Set the password hash
-    members[matchedIndex].passwordHash = hashPassword(newPassword);
-    localStorage.setItem('futamap_members', JSON.stringify(members));
+    const updateRes = await fetch(`/api/members/${matched.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ passwordHash })
+    });
+
+    if (!updateRes.ok) {
+      throw new Error('Failed to update member credentials.');
+    }
   }
 };

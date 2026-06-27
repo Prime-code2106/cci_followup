@@ -1,32 +1,54 @@
 import { Attendance, ServiceType } from '../types';
-import { mockAttendance } from '../data/attendance';
-import { activityService } from './activityService';
-import { authService } from './authService';
+import { authService } from './authService.ts';
+import { activityService } from './activityService.ts';
 
 const STORAGE_KEY = 'futamap_attendance';
 
-const initializeAttendance = (): Attendance[] => {
-  const stored = localStorage.getItem(STORAGE_KEY);
-  if (stored) {
-    try {
-      return JSON.parse(stored);
-    } catch (e) {
-      console.error("Error parsing attendance list", e);
-    }
-  }
-  const enriched = mockAttendance.map(a => ({ ...a, churchId: a.churchId || 'futamap' }));
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(enriched));
-  return enriched;
-};
-
 export const attendanceService = {
   getAttendance(): Attendance[] {
-    const all = initializeAttendance();
-    const session = authService.getCurrentSession();
-    if (session) {
-      return all.filter(a => a.churchId === session.churchId);
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored) {
+      try {
+        const all = JSON.parse(stored);
+        const session = authService.getCurrentSession();
+        if (session) {
+          return all.filter((a: any) => a.churchId === session.churchId);
+        }
+        return all.filter((a: any) => a.churchId === 'futamap');
+      } catch (e) {
+        console.error("Error parsing attendance cache", e);
+      }
     }
-    return all.filter(a => a.churchId === 'futamap');
+    return [];
+  },
+
+  async fetchAttendance(): Promise<Attendance[]> {
+    try {
+      const session = authService.getCurrentSession();
+      const url = session ? `/api/attendance?churchId=${session.churchId}` : '/api/attendance';
+      const res = await fetch(url);
+      if (res.ok) {
+        const data = await res.json();
+        
+        const stored = localStorage.getItem(STORAGE_KEY);
+        let allRecords: Attendance[] = [];
+        if (stored) {
+          try {
+            allRecords = JSON.parse(stored);
+          } catch {}
+        }
+        
+        const churchIdFilter = session ? session.churchId : 'futamap';
+        allRecords = allRecords.filter(a => a.churchId !== churchIdFilter);
+        allRecords = [...data, ...allRecords];
+        
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(allRecords));
+        return data;
+      }
+    } catch (err) {
+      console.error('Failed to fetch attendance:', err);
+    }
+    return this.getAttendance();
   },
 
   getAttendanceHistoryForMember(memberId: string): Attendance[] {
@@ -34,58 +56,59 @@ export const attendanceService = {
     return records.filter(r => r.memberId === memberId);
   },
 
-  addAttendance(
+  async addAttendance(
     memberId: string, 
     memberName: string, 
     serviceType: ServiceType, 
     date: string,
     chosenChurchId?: string
-  ): Attendance {
+  ): Promise<Attendance> {
     const currentChurchId = chosenChurchId || authService.getCurrentSession()?.churchId || 'futamap';
-    const allRecords = initializeAttendance();
     
-    // Check if attendance already recorded today for this service for this member
-    const existing = allRecords.find(
-      r => r.memberId === memberId && r.date === date && r.serviceType === serviceType && r.churchId === currentChurchId
-    );
-    if (existing) {
-      return existing;
-    }
-
     const newRecord: Attendance = {
-      id: 'att_' + Math.random().toString(36).substr(2, 9),
+      id: 'att_' + Math.random().toString(36).substring(2, 11),
       churchId: currentChurchId,
       memberId,
       date,
       serviceType
     };
 
-    const updated = [newRecord, ...allRecords];
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+    const res = await fetch('/api/attendance', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newRecord)
+    });
+
+    if (res.status === 409) {
+      // Already registered, return existing
+      return newRecord;
+    }
+
+    if (!res.ok) {
+      throw new Error('Failed to record attendance on backend.');
+    }
 
     // Log the recent activity
-    activityService.addActivity({
+    await activityService.addActivity({
       type: 'attendance',
       description: `${memberName} attended ${serviceType}.`,
       timestamp: date,
       memberName: memberName
     }, currentChurchId);
 
+    await this.fetchAttendance();
     return newRecord;
   },
 
-  removeAttendance(id: string) {
-    const allRecords = initializeAttendance();
-    
-    const index = allRecords.findIndex(r => r.id === id);
-    if (index === -1) return;
+  async removeAttendance(id: string): Promise<void> {
+    const res = await fetch(`/api/attendance/${id}`, {
+      method: 'DELETE'
+    });
 
-    const session = authService.getCurrentSession();
-    if (session && allRecords[index].churchId !== session.churchId) {
-      throw new Error("Access denied: Tenant mismatch.");
+    if (!res.ok) {
+      throw new Error('Failed to delete attendance on backend.');
     }
 
-    const updated = allRecords.filter(r => r.id !== id);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+    await this.fetchAttendance();
   }
 };

@@ -100,7 +100,7 @@ export default function FollowUpView({
                 id="fu-filter"
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="block w-full px-3 py-1.8 border border-gray-150 rounded-xl bg-white text-xs font-semibold text-gray-700"
+                className="block w-full px-3 py-2 border border-gray-150 rounded-xl bg-white text-xs font-semibold text-gray-700"
               >
                 <option value="All">All statuses</option>
                 <option value="Needs Follow Up">Needs Follow Up</option>

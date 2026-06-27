@@ -1,121 +1,49 @@
 import { FellowshipConnection, FellowshipNote, Member } from '../types';
-import { memberService } from './memberService';
+import { memberService } from './memberService.ts';
 
 const CONNECTIONS_KEY = 'futamap_fellowship_connections';
 const NOTES_KEY = 'futamap_fellowship_notes';
 
-// Seeding standard initial database state for demonstration
-const seedInitialConnections = (churchId: string, currentMemberId: string): FellowshipConnection[] => {
-  // We'll dynamically find 2 members in the same church and make them pending/connected
-  const siblings = memberService.getMembers().filter(m => m.id !== currentMemberId);
-  const seeded: FellowshipConnection[] = [];
-
-  if (siblings.length >= 2) {
-    // 1 connected friend
-    seeded.push({
-      id: 'conn_1',
-      churchId: churchId,
-      senderId: siblings[0].id,
-      receiverId: currentMemberId,
-      status: 'connected',
-      dateRequested: '2026-06-15'
-    });
-    // Another connected friend
-    if (siblings[1]) {
-      seeded.push({
-        id: 'conn_2',
-        churchId: churchId,
-        senderId: siblings[1].id,
-        receiverId: currentMemberId,
-        status: 'connected',
-        dateRequested: '2026-06-16'
-      });
-    }
-    // 1 pending inward request they can choose to Accept or Decline
-    if (siblings[2]) {
-      seeded.push({
-        id: 'conn_3',
-        churchId: churchId,
-        senderId: siblings[2].id,
-        receiverId: currentMemberId,
-        status: 'pending',
-        dateRequested: '2026-06-18'
-      });
-    }
-  }
-  return seeded;
-};
-
-const seedInitialNotes = (churchId: string, currentMemberId: string, connections: FellowshipConnection[]): FellowshipNote[] => {
-  const notes: FellowshipNote[] = [];
-  const activeFriend = connections.find(c => c.status === 'connected');
-  
-  if (activeFriend) {
-    const friendProfile = memberService.getMemberById(activeFriend.senderId);
-    if (friendProfile) {
-      notes.push({
-        id: 'note_1',
-        churchId: churchId,
-        senderId: friendProfile.id,
-        senderName: friendProfile.fullName,
-        receiverId: currentMemberId,
-        message: 'Brethren, standing with you in prayers regarding your semester exams. Keep shining the light!',
-        dateSent: '2026-06-16',
-        theme: 'Prayer'
-      });
-      notes.push({
-        id: 'note_2',
-        churchId: churchId,
-        senderId: friendProfile.id,
-        senderName: friendProfile.fullName,
-        receiverId: currentMemberId,
-        message: 'Amazing service yesterday! The teaching on spiritual alignment really aligned with what we touched on in our MAP meeting.',
-        dateSent: '2026-06-17',
-        theme: 'Encouragement'
-      });
-    }
-  }
-  return notes;
-};
-
-const getStoredConnections = (churchId: string, currentMemberId: string): FellowshipConnection[] => {
-  const stored = localStorage.getItem(CONNECTIONS_KEY);
-  if (stored) {
-    try {
-      return JSON.parse(stored);
-    } catch (e) {
-      console.error(e);
-    }
-  }
-  const seeded = seedInitialConnections(churchId, currentMemberId);
-  localStorage.setItem(CONNECTIONS_KEY, JSON.stringify(seeded));
-  return seeded;
-};
-
-const getStoredNotes = (churchId: string, currentMemberId: string, connections: FellowshipConnection[]): FellowshipNote[] => {
-  const stored = localStorage.getItem(NOTES_KEY);
-  if (stored) {
-    try {
-      return JSON.parse(stored);
-    } catch (e) {
-      console.error(e);
-    }
-  }
-  const seeded = seedInitialNotes(churchId, currentMemberId, connections);
-  localStorage.setItem(NOTES_KEY, JSON.stringify(seeded));
-  return seeded;
-};
-
 export const fellowshipService = {
-  // TODO: Replace with Supabase table select / join queries
-  
+  // Sync all fellowship data from Postgres to client cache
+  async fetchFellowshipData(churchId: string): Promise<void> {
+    try {
+      const [connRes, notesRes] = await Promise.all([
+        fetch(`/api/fellowship/connections?churchId=${churchId}`),
+        fetch(`/api/fellowship/notes?churchId=${churchId}`)
+      ]);
+
+      if (connRes.ok) {
+        const conns = await connRes.json();
+        localStorage.setItem(CONNECTIONS_KEY, JSON.stringify(conns));
+      }
+      if (notesRes.ok) {
+        const notes = await notesRes.json();
+        localStorage.setItem(NOTES_KEY, JSON.stringify(notes));
+      }
+    } catch (err) {
+      console.error('Failed to sync fellowship data from server:', err);
+    }
+  },
+
   getConnections(churchId: string, memberId: string): FellowshipConnection[] {
-    return getStoredConnections(churchId, memberId);
+    const stored = localStorage.getItem(CONNECTIONS_KEY);
+    if (stored) {
+      try {
+        return JSON.parse(stored);
+      } catch {}
+    }
+    return [];
   },
 
   getNotes(churchId: string, memberId: string): FellowshipNote[] {
-    const conns = this.getConnections(churchId, memberId);
-    return getStoredNotes(churchId, memberId, conns);
+    const stored = localStorage.getItem(NOTES_KEY);
+    if (stored) {
+      try {
+        return JSON.parse(stored);
+      } catch {}
+    }
+    return [];
   },
 
   // Get active friend profiles of a member
@@ -151,10 +79,8 @@ export const fellowshipService = {
   },
 
   // Send a new fellowship invitation
-  sendConnectionRequest(churchId: string, senderId: string, receiverId: string): FellowshipConnection {
-    const conns = getStoredConnections(churchId, senderId);
-    
-    // Check if duplicate
+  async sendConnectionRequest(churchId: string, senderId: string, receiverId: string): Promise<FellowshipConnection> {
+    const conns = this.getConnections(churchId, senderId);
     const exists = conns.find(c => 
       (c.senderId === senderId && c.receiverId === receiverId) ||
       (c.senderId === receiverId && c.receiverId === senderId)
@@ -165,7 +91,7 @@ export const fellowshipService = {
     }
 
     const newConn: FellowshipConnection = {
-      id: 'conn_' + Math.random().toString(36).substr(2, 9),
+      id: 'conn_' + Math.random().toString(36).substring(2, 11),
       churchId,
       senderId,
       receiverId,
@@ -173,35 +99,54 @@ export const fellowshipService = {
       dateRequested: new Date().toISOString().split('T')[0]
     };
 
-    const updated = [...conns, newConn];
-    localStorage.setItem(CONNECTIONS_KEY, JSON.stringify(updated));
+    const res = await fetch('/api/fellowship/connections', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newConn)
+    });
+
+    if (res.ok) {
+      await this.fetchFellowshipData(churchId);
+    }
+
     return newConn;
   },
 
   // Accept fellowship invitation
-  acceptConnectionRequest(churchId: string, connectionId: string): void {
-    const conns = getStoredConnections(churchId, '');
-    const index = conns.findIndex(c => c.id === connectionId);
-    if (index !== -1) {
-      conns[index].status = 'connected';
-      localStorage.setItem(CONNECTIONS_KEY, JSON.stringify(conns));
+  async acceptConnectionRequest(churchId: string, connectionId: string): Promise<void> {
+    const res = await fetch(`/api/fellowship/connections/${connectionId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'connected' })
+    });
+
+    if (res.ok) {
+      await this.fetchFellowshipData(churchId);
     }
   },
 
   // Decline or delete fellowship link
-  removeConnection(churchId: string, connectionId: string): void {
-    const conns = getStoredConnections(churchId, '');
-    const filtered = conns.filter(c => c.id !== connectionId);
-    localStorage.setItem(CONNECTIONS_KEY, JSON.stringify(filtered));
+  async removeConnection(churchId: string, connectionId: string): Promise<void> {
+    const res = await fetch(`/api/fellowship/connections/${connectionId}`, {
+      method: 'DELETE'
+    });
+
+    if (res.ok) {
+      await this.fetchFellowshipData(churchId);
+    }
   },
 
   // Send a custom spiritual encouragement message
-  sendFellowshipNote(churchId: string, senderId: string, senderName: string, receiverId: string, message: string, theme: 'Prayer' | 'Encouragement' | 'Salutation' | 'Check-in'): FellowshipNote {
-    const conns = getStoredConnections(churchId, senderId);
-    const notes = getStoredNotes(churchId, senderId, conns);
-
+  async sendFellowshipNote(
+    churchId: string, 
+    senderId: string, 
+    senderName: string, 
+    receiverId: string, 
+    message: string, 
+    theme: 'Prayer' | 'Encouragement' | 'Salutation' | 'Check-in'
+  ): Promise<FellowshipNote> {
     const newNote: FellowshipNote = {
-      id: 'note_' + Math.random().toString(36).substr(2, 9),
+      id: 'note_' + Math.random().toString(36).substring(2, 11),
       churchId,
       senderId,
       senderName,
@@ -211,8 +156,16 @@ export const fellowshipService = {
       theme
     };
 
-    const updated = [newNote, ...notes];
-    localStorage.setItem(NOTES_KEY, JSON.stringify(updated));
+    const res = await fetch('/api/fellowship/notes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newNote)
+    });
+
+    if (res.ok) {
+      await this.fetchFellowshipData(churchId);
+    }
+
     return newNote;
   }
 };

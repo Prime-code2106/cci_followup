@@ -1,4 +1,5 @@
 import { ArrowRight, Users, UserPlus, HeartHandshake, CalendarCheck, PhoneCall, Cake, Sparkles, QrCode } from 'lucide-react';
+import { authService } from '../../services/authService';
 
 interface LandingPageProps {
   onNavigate: (viewId: string) => void;
@@ -9,6 +10,8 @@ interface LandingPageProps {
 }
 
 export default function LandingPage({ onNavigate, churchName, mapName, activeChurchId, onChurchChange }: LandingPageProps) {
+  const registeredChurches = authService.getChurchesList();
+
   const features = [
     {
       title: "Member Management",
@@ -51,20 +54,48 @@ export default function LandingPage({ onNavigate, churchName, mapName, activeChu
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col justify-between font-sans">
       {/* Top Banner Navigation */}
-      <nav className="bg-white border-b border-gray-100 py-4 px-6 sm:px-12 flex justify-between items-center shadow-2xs">
-        <div className="flex items-center space-x-2">
-          <span className="font-bold text-gray-900 tracking-tight text-base">{churchName}</span>
+      <nav className="bg-white border-b border-gray-100 py-4 px-4 sm:px-12 flex flex-col md:flex-row justify-between items-stretch md:items-center gap-4 shadow-xs">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full md:w-auto">
+          <div className="flex items-center justify-between">
+            <span className="font-bold text-gray-950 tracking-tight text-lg font-sans">AssemblyPortal</span>
+          </div>
+          
+          {/* Tenant Switcher Dropdown */}
+          <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-2 bg-slate-50 p-2 sm:p-0 sm:bg-transparent rounded-xl">
+            <div className="flex items-center gap-1.5">
+              <span className="text-gray-300 hidden sm:inline">|</span>
+              <span className="text-[10px] sm:text-xs text-gray-400 font-bold uppercase tracking-wider">Viewing Assembly:</span>
+            </div>
+            <select
+              value={activeChurchId}
+              onChange={(e) => onChurchChange(e.target.value)}
+              className="text-xs font-semibold text-slate-700 bg-white sm:bg-slate-100 border border-slate-200 rounded-lg px-2.5 py-2 focus:ring-2 focus:ring-blue-500/15 focus:border-blue-500 cursor-pointer w-full sm:w-auto shrink-0 shadow-2xs"
+            >
+              {registeredChurches.map((ch) => (
+                <option key={ch.id} value={ch.id}>
+                  {ch.name}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
-        <div className="flex items-center space-x-2">
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 md:flex md:flex-row items-stretch md:items-center gap-2 w-full md:w-auto shrink-0">
+          <button
+            onClick={() => onNavigate('register-church')}
+            className="text-xs sm:text-sm font-semibold text-slate-600 hover:text-slate-850 hover:bg-slate-50 border border-gray-200 px-3 py-2.5 rounded-xl transition-all cursor-pointer text-center"
+          >
+            Register Org / Church
+          </button>
           <button
             onClick={() => onNavigate('member-login')}
-            className="text-xs sm:text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-xl transition-all shadow-xs cursor-pointer"
+            className="text-xs sm:text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 px-4 py-2.5 rounded-xl transition-all shadow-xs cursor-pointer text-center"
           >
             Member Login
           </button>
           <button
             onClick={() => onNavigate('dashboard')}
-            className="text-xs sm:text-sm font-semibold text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-4 py-2 rounded-xl transition-all border border-blue-100 cursor-pointer"
+            className="text-xs sm:text-sm font-semibold text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-4 py-2.5 rounded-xl transition-all border border-blue-100 cursor-pointer text-center"
           >
             Leader Login
           </button>
@@ -73,45 +104,49 @@ export default function LandingPage({ onNavigate, churchName, mapName, activeChu
 
       {/* Hero Section */}
       <main className="flex-1">
-        <div className="max-w-5xl mx-auto px-6 py-12 sm:py-20 text-center space-y-8">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8 sm:py-20 text-center space-y-6 sm:space-y-8">
 
 
-          <h1 className="text-4xl sm:text-6xl font-bold text-slate-900 tracking-tight leading-none max-w-3xl mx-auto">
+          <h1 className="text-3xl sm:text-5xl md:text-6xl font-extrabold text-slate-900 tracking-tight leading-tight max-w-3xl mx-auto break-words px-2">
             {churchName === 'Celebration Church International' ? (
               <>
                 Celebration Church <span className="text-blue-600">International</span>
               </>
             ) : churchName === 'RCCG' ? (
               <>
-                Redeemed Christian <span className="text-emerald-650">Church of God</span>
+                Redeemed Christian <span className="text-emerald-600">Church of God</span>
+              </>
+            ) : churchName === 'Winners Chapel' ? (
+              <>
+                Winners Chapel <span className="text-rose-600">International</span>
               </>
             ) : (
               <>
-                Winners Chapel <span className="text-rose-650">International</span>
+                {churchName}
               </>
             )}
           </h1>
 
-          <p className="text-lg sm:text-xl text-slate-500 max-w-2xl mx-auto font-medium leading-relaxed">
+          <p className="text-base sm:text-lg md:text-xl text-slate-500 max-w-2xl mx-auto font-medium leading-relaxed px-4">
             Helping us care for people intentionally. A platform for managing members, visitors, attendance and follow-up activities.
           </p>
 
           {/* Call To Actions */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 max-w-5xl mx-auto pt-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 max-w-5xl mx-auto pt-4 sm:pt-6">
             <button
               onClick={() => onNavigate('register-member')}
-              className="flex items-center justify-between p-5 bg-white border border-gray-100 hover:border-blue-440 rounded-2xl shadow-xs hover:shadow-md transition-all text-left cursor-pointer group"
+              className="flex items-center justify-between p-4 sm:p-5 bg-white border border-gray-100 hover:border-blue-400 rounded-2xl shadow-xs hover:shadow-md transition-all text-left cursor-pointer group"
             >
               <div>
                 <span className="block text-xs font-bold text-blue-600 uppercase tracking-widest mb-1">New Member</span>
                 <span className="block font-semibold text-slate-800 text-sm leading-tight">Register Profile</span>
               </div>
-              <ArrowRight className="w-5 h-5 text-gray-450 group-hover:translate-x-1 group-hover:text-blue-600 transition-all" />
+              <ArrowRight className="w-5 h-5 text-gray-400 group-hover:translate-x-1 group-hover:text-blue-600 transition-all" />
             </button>
 
             <button
               onClick={() => onNavigate('register-visitor')}
-              className="flex items-center justify-between p-5 bg-white border border-gray-100 hover:border-emerald-440 rounded-2xl shadow-xs hover:shadow-md transition-all text-left cursor-pointer group"
+              className="flex items-center justify-between p-4 sm:p-5 bg-white border border-gray-100 hover:border-emerald-440 rounded-2xl shadow-xs hover:shadow-md transition-all text-left cursor-pointer group"
             >
               <div>
                 <span className="block text-xs font-bold text-emerald-600 uppercase tracking-widest mb-1">Visitor</span>
@@ -122,7 +157,7 @@ export default function LandingPage({ onNavigate, churchName, mapName, activeChu
 
             <button
               onClick={() => onNavigate('prayer-request')}
-              className="flex items-center justify-between p-5 bg-white border border-gray-100 hover:border-amber-440 rounded-2xl shadow-xs hover:shadow-md transition-all text-left cursor-pointer group"
+              className="flex items-center justify-between p-4 sm:p-5 bg-white border border-gray-100 hover:border-amber-440 rounded-2xl shadow-xs hover:shadow-md transition-all text-left cursor-pointer group"
             >
               <div>
                 <span className="block text-xs font-bold text-amber-600 uppercase tracking-widest mb-1">Intercession</span>
@@ -133,7 +168,7 @@ export default function LandingPage({ onNavigate, churchName, mapName, activeChu
 
             <button
               onClick={() => onNavigate('check-in')}
-              className="flex items-center justify-between p-5 bg-white border border-gray-100 hover:border-indigo-400 rounded-2xl shadow-xs hover:shadow-md transition-all text-left cursor-pointer group"
+              className="flex items-center justify-between p-4 sm:p-5 bg-white border border-gray-100 hover:border-indigo-400 rounded-2xl shadow-xs hover:shadow-md transition-all text-left cursor-pointer group"
             >
               <div>
                 <span className="block text-xs font-bold text-indigo-600 uppercase tracking-widest mb-1">Attendance</span>
@@ -179,7 +214,6 @@ export default function LandingPage({ onNavigate, churchName, mapName, activeChu
         <div className="max-w-5xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-6">
           <div>
             <div className="flex items-center space-x-2 text-white font-bold text-base mb-1.5">
-              <Sparkles className="w-4 h-4 text-blue-400" />
               <span>{churchName}</span>
             </div>
             <p className="text-xs text-slate-500 max-w-sm font-mono">

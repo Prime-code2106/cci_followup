@@ -1,87 +1,114 @@
 import { PrayerRequest } from '../types';
-import { mockPrayerRequests } from '../data/prayerRequests';
-import { activityService } from './activityService';
-import { authService } from './authService';
+import { authService } from './authService.ts';
+import { activityService } from './activityService.ts';
 
 const STORAGE_KEY = 'futamap_prayer_requests';
 
-const initializePrayerRequests = (): PrayerRequest[] => {
-  const stored = localStorage.getItem(STORAGE_KEY);
-  if (stored) {
-    try {
-      return JSON.parse(stored);
-    } catch (e) {
-      console.error("Error parsing prayer requests list", e);
-    }
-  }
-  const enriched = mockPrayerRequests.map(p => ({ ...p, churchId: p.churchId || 'futamap' }));
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(enriched));
-  return enriched;
-};
-
 export const prayerService = {
   getPrayerRequests(): PrayerRequest[] {
-    const all = initializePrayerRequests();
-    const session = authService.getCurrentSession();
-    if (session) {
-      return all.filter(p => p.churchId === session.churchId);
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored) {
+      try {
+        const all = JSON.parse(stored);
+        const session = authService.getCurrentSession();
+        if (session) {
+          return all.filter((p: any) => p.churchId === session.churchId);
+        }
+        return all.filter((p: any) => p.churchId === 'futamap');
+      } catch (e) {
+        console.error("Error parsing prayer requests cache", e);
+      }
     }
-    return all.filter(p => p.churchId === 'futamap');
+    return [];
   },
 
-  addPrayerRequest(
+  async fetchPrayerRequests(): Promise<PrayerRequest[]> {
+    try {
+      const session = authService.getCurrentSession();
+      const url = session ? `/api/prayer-requests?churchId=${session.churchId}` : '/api/prayer-requests';
+      const res = await fetch(url);
+      if (res.ok) {
+        const data = await res.json();
+        
+        const stored = localStorage.getItem(STORAGE_KEY);
+        let allRequests: PrayerRequest[] = [];
+        if (stored) {
+          try {
+            allRequests = JSON.parse(stored);
+          } catch {}
+        }
+        
+        const churchIdFilter = session ? session.churchId : 'futamap';
+        allRequests = allRequests.filter(p => p.churchId !== churchIdFilter);
+        allRequests = [...data, ...allRequests];
+        
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(allRequests));
+        return data;
+      }
+    } catch (err) {
+      console.error('Failed to fetch prayer requests:', err);
+    }
+    return this.getPrayerRequests();
+  },
+
+  async addPrayerRequest(
     prayerRequest: Omit<PrayerRequest, 'id' | 'status' | 'dateSubmitted' | 'churchId'>, 
     chosenChurchId?: string
-  ): PrayerRequest {
+  ): Promise<PrayerRequest> {
     const currentChurchId = chosenChurchId || authService.getCurrentSession()?.churchId || 'futamap';
-    const allRequests = initializePrayerRequests();
     
     const newRequest: PrayerRequest = {
       ...prayerRequest,
-      id: 'pr_' + Math.random().toString(36).substr(2, 9),
+      id: 'pr_' + Math.random().toString(36).substring(2, 11),
       churchId: currentChurchId,
       dateSubmitted: new Date().toISOString().split('T')[0],
       status: 'Praying'
     };
 
-    const updated = [newRequest, ...allRequests];
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+    const res = await fetch('/api/prayer-requests', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newRequest)
+    });
+
+    if (!res.ok) {
+      throw new Error('Failed to record prayer request on backend.');
+    }
 
     // Log the recent activity
-    activityService.addActivity({
+    await activityService.addActivity({
       type: 'prayer',
       description: `${newRequest.fullName} submitted a prayer request.`,
       timestamp: newRequest.dateSubmitted,
       memberName: newRequest.fullName
     }, currentChurchId);
 
+    await this.fetchPrayerRequests();
     return newRequest;
   },
 
-  updatePrayerRequestStatus(id: string, status: PrayerRequest['status']): PrayerRequest {
-    const allRequests = initializePrayerRequests();
-    const index = allRequests.findIndex(r => r.id === id);
-    if (index === -1) {
-      throw new Error(`Prayer request with id ${id} not found.`);
+  async updatePrayerRequestStatus(id: string, status: PrayerRequest['status']): Promise<PrayerRequest> {
+    const res = await fetch(`/api/prayer-requests/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status })
+    });
+
+    if (!res.ok) {
+      throw new Error('Failed to update prayer request on backend.');
     }
 
-    const session = authService.getCurrentSession();
-    if (session && allRequests[index].churchId !== session.churchId) {
-      throw new Error("Access denied: Tenant mismatch.");
-    }
-
-    const updated = { ...allRequests[index], status };
-    allRequests[index] = updated;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(allRequests));
+    const updated = await res.json();
 
     // Log update activity
-    activityService.addActivity({
+    await activityService.addActivity({
       type: 'prayer',
       description: `Marked prayer request from ${updated.fullName} as ${status}.`,
       timestamp: new Date().toISOString().split('T')[0],
       memberName: updated.fullName
     }, updated.churchId);
 
+    await this.fetchPrayerRequests();
     return updated;
   }
 };

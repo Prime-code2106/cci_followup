@@ -34,13 +34,13 @@ export default function PrayerSubmission({ onBackToPortal, mapName: propMapName,
   const selectedChurchDetails = registeredChurches.find(c => c.id === formData.churchId);
   const activeMapName = selectedChurchDetails ? selectedChurchDetails.mapName : 'MAP Alpha';
 
-  const handleAddNewChurchSubmit = () => {
+  const handleAddNewChurchSubmit = async () => {
     if (!newChurchName.trim()) {
       setChurchError('Church name is required.');
       return;
     }
     try {
-      const created = authService.registerChurch(
+      const created = await authService.registerChurch(
         newChurchName.trim(), 
         newChurchMapName.trim() || `${newChurchName.trim()} Group`,
         '', 
@@ -131,7 +131,7 @@ export default function PrayerSubmission({ onBackToPortal, mapName: propMapName,
           </div>
           <button
             onClick={onBackToPortal}
-            className="flex items-center text-xs font-semibold text-slate-300 hover:text-white bg-slate-800 px-3.5 py-1.8 rounded-xl transition-all cursor-pointer"
+            className="flex items-center text-xs font-semibold text-slate-300 hover:text-white bg-slate-800 px-3.5 py-2 rounded-xl transition-all cursor-pointer"
           >
             <ArrowLeft className="w-4 h-4 mr-1.5" />
             Home
@@ -233,7 +233,7 @@ export default function PrayerSubmission({ onBackToPortal, mapName: propMapName,
                           value={newChurchName} 
                           onChange={(e) => setNewChurchName(e.target.value)}
                           placeholder="e.g. Daystar Christian Centre"
-                          className="block w-full px-3 py-1.8 border border-slate-200 rounded-lg text-xs bg-slate-50 focus:ring-blue-500 text-slate-800 font-medium"
+                          className="block w-full px-3 py-2 border border-slate-200 rounded-lg text-xs bg-slate-50 focus:ring-blue-500 text-slate-800 font-medium"
                         />
                       </div>
                       <div>
@@ -243,7 +243,7 @@ export default function PrayerSubmission({ onBackToPortal, mapName: propMapName,
                           value={newChurchMapName} 
                           onChange={(e) => setNewChurchMapName(e.target.value)}
                           placeholder="e.g. Hope Group"
-                          className="block w-full px-3 py-1.8 border border-slate-200 rounded-lg text-xs bg-slate-50 focus:ring-blue-500 text-slate-800 font-medium"
+                          className="block w-full px-3 py-2 border border-slate-200 rounded-lg text-xs bg-slate-50 focus:ring-blue-500 text-slate-800 font-medium"
                         />
                       </div>
                       {churchError && <p className="text-[10px] text-red-500 font-semibold">{churchError}</p>}

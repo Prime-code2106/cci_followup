@@ -69,7 +69,7 @@ export default function VisitorsView({
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="block w-full md:w-44 px-3 py-1.8 border border-gray-150 bg-white rounded-xl text-xs font-semibold text-gray-700"
+            className="block w-full md:w-44 px-3 py-2 border border-gray-150 bg-white rounded-xl text-xs font-semibold text-gray-700"
           >
             <option value="All">All statuses</option>
             <option value="Pending">Pending follow up</option>

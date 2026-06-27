@@ -10,6 +10,7 @@ import { followUpService } from './services/followUpService';
 import { activityService } from './services/activityService';
 import { settingsService } from './services/settingsService';
 import { authService } from './services/authService';
+import { fellowshipService } from './services/fellowshipService';
 
 // Base Components
 import Sidebar from './components/Sidebar';
@@ -104,14 +105,40 @@ export default function App() {
   const [recentActivities, setRecentActivities] = useState<RecentActivity[]>([]);
 
   // Refresh reactive data records
-  const refreshAllData = useCallback(() => {
-    setMembers(memberService.getMembers());
-    setVisitors(visitorService.getVisitors());
-    setAttendance(attendanceService.getAttendance());
-    setPrayerRequests(prayerService.getPrayerRequests());
-    setFollowUps(followUpService.getFollowUps());
-    setRecentActivities(activityService.getActivities());
-  }, [session]); // depend on session so it triggers on login state shift
+  const refreshAllData = useCallback(async () => {
+    try {
+      const activeMemberSession = authService.getCurrentMemberSession();
+      const activeAdminSession = authService.getCurrentSession();
+      const activeChurchId = activeMemberSession?.churchId || activeAdminSession?.churchId || 'futamap';
+
+      const [m, v, a, p, f, act] = await Promise.all([
+        memberService.fetchMembers(),
+        visitorService.fetchVisitors(),
+        attendanceService.fetchAttendance(),
+        prayerService.fetchPrayerRequests(),
+        followUpService.fetchFollowUps(),
+        activityService.fetchActivities()
+      ]);
+
+      await fellowshipService.fetchFellowshipData(activeChurchId);
+
+      setMembers(m);
+      setVisitors(v);
+      setAttendance(a);
+      setPrayerRequests(p);
+      setFollowUps(f);
+      setRecentActivities(act);
+    } catch (err) {
+      console.error("Error refreshing fullstack data from server:", err);
+      // Fallback to synchronous cached reads
+      setMembers(memberService.getMembers());
+      setVisitors(visitorService.getVisitors());
+      setAttendance(attendanceService.getAttendance());
+      setPrayerRequests(prayerService.getPrayerRequests());
+      setFollowUps(followUpService.getFollowUps());
+      setRecentActivities(activityService.getActivities());
+    }
+  }, [session, memberSession]);
 
   // Run initial state loading
   useEffect(() => {
@@ -238,6 +265,15 @@ export default function App() {
           />
         );
 
+      case 'register-church':
+        return (
+          <AdminLogin
+            onLoginSuccess={handleLoginSuccess}
+            onBackToPortal={() => handleViewChange('landing')}
+            initialIsRegistering={true}
+          />
+        );
+
       case 'member-login':
         return (
           <MemberLogin
@@ -360,6 +396,7 @@ export default function App() {
               setAppSettings(updated);
               refreshAllData();
             }}
+            onRefreshData={refreshAllData}
           />
         );
 

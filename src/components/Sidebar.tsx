@@ -130,10 +130,8 @@ export default function Sidebar({
             <div className="px-3 pb-3">
               <button
                 onClick={() => {
-                  if (window.confirm("Are you sure you want to log out of your session?")) {
-                    onLogout();
-                    onClose();
-                  }
+                  onLogout();
+                  onClose();
                 }}
                 className="w-full flex items-center px-4 py-2.5 rounded-xl text-xs font-semibold text-red-400 hover:text-red-350 hover:bg-red-950/20 transition-all cursor-pointer group"
               >

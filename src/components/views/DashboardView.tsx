@@ -79,40 +79,35 @@ export default function DashboardView({
 
   // 2. Generate Attendance Chart Mock-Aggregates
   const attendanceChartData = useMemo(() => {
+    const isNewChurch = members.length === 0;
     // Group attendance by service type
     const serviceGroups: Record<string, number> = {
-      'Sunday Service': 12,
-      'Bible Study': 3,
-      'Prayer Meeting': 2,
-      'MAP Meeting': 3
+      'Sunday Service': isNewChurch ? 0 : 12,
+      'Bible Study': isNewChurch ? 0 : 3,
+      'Prayer Meeting': isNewChurch ? 0 : 2,
+      'MAP Meeting': isNewChurch ? 0 : 3
     };
 
-    // Calculate actual counts if we have records
-    attendance.forEach(att => {
-      if (serviceGroups[att.serviceType] !== undefined) {
-        // Just use realistic ratios + counts
-      }
-    });
-
     return [
-      { name: 'Sunday Service', Attendance: attendance.filter(a => a.serviceType === 'Sunday Service').length || 12, fill: '#2563eb' },
-      { name: 'Bible Study', Attendance: attendance.filter(a => a.serviceType === 'Bible Study').length || 4, fill: '#10b981' },
-      { name: 'Prayer Meeting', Attendance: attendance.filter(a => a.serviceType === 'Prayer Meeting').length || 2, fill: '#8b5cf6' },
-      { name: 'MAP Meeting', Attendance: attendance.filter(a => a.serviceType === 'MAP Meeting').length || 3, fill: '#f59e0b' }
+      { name: 'Sunday Service', Attendance: attendance.filter(a => a.serviceType === 'Sunday Service').length || (isNewChurch ? 0 : 12), fill: '#2563eb' },
+      { name: 'Bible Study', Attendance: attendance.filter(a => a.serviceType === 'Bible Study').length || (isNewChurch ? 0 : 4), fill: '#10b981' },
+      { name: 'Prayer Meeting', Attendance: attendance.filter(a => a.serviceType === 'Prayer Meeting').length || (isNewChurch ? 0 : 2), fill: '#8b5cf6' },
+      { name: 'MAP Meeting', Attendance: attendance.filter(a => a.serviceType === 'MAP Meeting').length || (isNewChurch ? 0 : 3), fill: '#f59e0b' }
     ];
-  }, [attendance]);
+  }, [attendance, members]);
 
   // 3. Generate Visitor Growth Chart
   const visitorGrowthData = useMemo(() => {
+    const isNewChurch = members.length === 0;
     // Renders monthly visitor counts
     return [
-      { month: 'Feb', Visitors: 1 },
-      { month: 'Mar', Visitors: 2 },
-      { month: 'Apr', Visitors: 1 },
-      { month: 'May', Visitors: 3 },
-      { month: 'Jun', Visitors: visitors.length || 4 } // Reacts to our visitors list state!
+      { month: 'Feb', Visitors: isNewChurch ? 0 : 1 },
+      { month: 'Mar', Visitors: isNewChurch ? 0 : 2 },
+      { month: 'Apr', Visitors: isNewChurch ? 0 : 1 },
+      { month: 'May', Visitors: isNewChurch ? 0 : 3 },
+      { month: 'Jun', Visitors: visitors.length || (isNewChurch ? 0 : 4) } // Reacts to our visitors list state!
     ];
-  }, [visitors]);
+  }, [visitors, members]);
 
   return (
     <div className="space-y-8 animate-fade-in font-sans">
@@ -230,52 +225,56 @@ export default function DashboardView({
         </div>
 
         <div className="flow-root">
-          <ul className="-mb-8">
-            {recentActivities.slice(0, 5).map((activity, itemIdx) => (
-              <li key={activity.id}>
-                <div className="relative pb-8">
-                  {itemIdx !== recentActivities.slice(0, 5).length - 1 ? (
-                    <span className="absolute top-4 left-4 -ml-px h-full w-0.5 bg-gray-100" aria-hidden="true" />
-                  ) : null}
-                  <div className="relative flex space-x-3.5">
-                    <div>
-                      <span className={`h-8.5 w-8.5 rounded-full flex items-center justify-center ring-4 ring-white ${
-                        activity.type === 'attendance' ? 'bg-violet-100 text-violet-600' :
-                        activity.type === 'prayer' ? 'bg-amber-100 text-amber-600' :
-                        activity.type === 'registration' ? 'bg-emerald-100 text-emerald-600' :
-                        'bg-blue-100 text-blue-600'
-                      }`}>
-                        {activity.type === 'attendance' && <CalendarDays className="w-4 h-4" />}
-                        {activity.type === 'prayer' && <Cake className="w-4 h-4" />} {/* wait! Cake is used, let's keep it tidy or any default */}
-                        {activity.type === 'registration' && <Users className="w-4 h-4" />}
-                        {activity.type === 'followup' && <PhoneCall className="w-4 h-4" />}
-                      </span>
-                    </div>
-                    <div className="flex-1 min-w-0 pt-1.5 flex justify-between items-start space-x-4">
+          {recentActivities.length === 0 ? (
+            <p className="text-xs text-gray-400 italic py-4 text-center font-medium font-sans">No recent actions or care logs recorded yet for this assembly.</p>
+          ) : (
+            <ul className="-mb-8">
+              {recentActivities.slice(0, 5).map((activity, itemIdx) => (
+                <li key={activity.id}>
+                  <div className="relative pb-8">
+                    {itemIdx !== recentActivities.slice(0, 5).length - 1 ? (
+                      <span className="absolute top-4 left-4 -ml-px h-full w-0.5 bg-gray-100" aria-hidden="true" />
+                    ) : null}
+                    <div className="relative flex space-x-3.5">
                       <div>
-                        {activity.memberName ? (
-                          <p className="text-xs text-slate-500">
-                            <span 
-                              onClick={() => onSelectMemberByName(activity.memberName!)} 
-                              className="font-bold text-slate-800 hover:text-blue-600 hover:underline cursor-pointer"
-                            >
-                              {activity.memberName}
-                            </span>{' '}
-                            {activity.description.replace(activity.memberName, '').trim()}
-                          </p>
-                        ) : (
-                          <p className="text-xs text-slate-500 font-sans">{activity.description}</p>
-                        )}
+                        <span className={`h-8.5 w-8.5 rounded-full flex items-center justify-center ring-4 ring-white ${
+                          activity.type === 'attendance' ? 'bg-violet-100 text-violet-600' :
+                          activity.type === 'prayer' ? 'bg-amber-100 text-amber-600' :
+                          activity.type === 'registration' ? 'bg-emerald-100 text-emerald-600' :
+                          'bg-blue-100 text-blue-600'
+                        }`}>
+                          {activity.type === 'attendance' && <CalendarDays className="w-4 h-4" />}
+                          {activity.type === 'prayer' && <Cake className="w-4 h-4" />} {/* wait! Cake is used, let's keep it tidy or any default */}
+                          {activity.type === 'registration' && <Users className="w-4 h-4" />}
+                          {activity.type === 'followup' && <PhoneCall className="w-4 h-4" />}
+                        </span>
                       </div>
-                      <div className="text-right text-[10px] font-semibold text-gray-400 font-mono whitespace-nowrap">
-                        {new Date(activity.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                      <div className="flex-1 min-w-0 pt-1.5 flex justify-between items-start space-x-4">
+                        <div>
+                          {activity.memberName ? (
+                            <p className="text-xs text-slate-500">
+                              <span 
+                                onClick={() => onSelectMemberByName(activity.memberName!)} 
+                                className="font-bold text-slate-800 hover:text-blue-600 hover:underline cursor-pointer"
+                              >
+                                {activity.memberName}
+                              </span>{' '}
+                              {activity.description.replace(activity.memberName, '').trim()}
+                            </p>
+                          ) : (
+                            <p className="text-xs text-slate-500 font-sans">{activity.description}</p>
+                          )}
+                        </div>
+                        <div className="text-right text-[10px] font-semibold text-gray-400 font-mono whitespace-nowrap">
+                          {new Date(activity.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              </li>
-            ))}
-          </ul>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </div>
     </div>

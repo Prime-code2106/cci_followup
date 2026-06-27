@@ -1,92 +1,110 @@
 import { Member } from '../types';
-import { mockMembers } from '../data/members';
-import { authService } from './authService';
+import { authService } from './authService.ts';
+import { activityService } from './activityService.ts';
 
 const STORAGE_KEY = 'futamap_members';
 
-// Ensures initial data exists in LocalStorage
-const initializeMembers = (): Member[] => {
-  const stored = localStorage.getItem(STORAGE_KEY);
-  if (stored) {
-    try {
-      return JSON.parse(stored);
-    } catch (e) {
-      console.error("Error parsing members list", e);
-    }
-  }
-  const enriched = mockMembers.map(m => ({ ...m, churchId: m.churchId || 'futamap' }));
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(enriched));
-  return enriched;
-};
-
 export const memberService = {
   getMembers(): Member[] {
-    const all = initializeMembers();
-    const session = authService.getCurrentSession();
-    if (session) {
-      return all.filter(m => m.churchId === session.churchId);
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored) {
+      try {
+        const all = JSON.parse(stored);
+        const session = authService.getCurrentSession();
+        if (session) {
+          return all.filter((m: any) => m.churchId === session.churchId);
+        }
+        return all.filter((m: any) => m.churchId === 'futamap');
+      } catch (e) {
+        console.error("Error parsing members list from cache", e);
+      }
     }
-    // Return all or empty. Let's return empty/isolated to prevent leakage unless no session is active.
-    return all.filter(m => m.churchId === 'futamap');
+    return [];
+  },
+
+  async fetchMembers(): Promise<Member[]> {
+    try {
+      const session = authService.getCurrentSession();
+      const url = session ? `/api/members?churchId=${session.churchId}` : '/api/members';
+      const res = await fetch(url);
+      if (res.ok) {
+        const data = await res.json();
+        
+        // Update local storage cache (merge/save)
+        const stored = localStorage.getItem(STORAGE_KEY);
+        let allMembers: Member[] = [];
+        if (stored) {
+          try {
+            allMembers = JSON.parse(stored);
+          } catch {}
+        }
+        
+        // Replace items from this churchId in our cache
+        const churchIdFilter = session ? session.churchId : 'futamap';
+        allMembers = allMembers.filter(m => m.churchId !== churchIdFilter);
+        allMembers = [...data, ...allMembers];
+        
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(allMembers));
+        return data;
+      }
+    } catch (err) {
+      console.error('Failed to fetch members from backend:', err);
+    }
+    return this.getMembers();
   },
 
   getMemberById(id: string): Member | undefined {
-    const members = initializeMembers();
-    const session = authService.getCurrentSession();
-    const m = members.find(item => item.id === id);
-    if (!m) return undefined;
-    
-    // Ensure the member belongs to the active tenant if authenticated
-    if (session && m.churchId !== session.churchId) {
-      return undefined;
-    }
-    return m;
+    const membersList = this.getMembers();
+    return membersList.find(item => item.id === id);
   },
 
-  addMember(member: Omit<Member, 'id' | 'status' | 'churchId'>, chosenChurchId?: string): Member {
+  async addMember(member: Omit<Member, 'id' | 'status' | 'churchId'>, chosenChurchId?: string): Promise<Member> {
     const currentChurchId = chosenChurchId || authService.getCurrentSession()?.churchId || 'futamap';
-    const allMembers = initializeMembers();
-    
     const newMember: Member = {
       ...member,
-      id: 'm_' + Math.random().toString(36).substr(2, 9),
+      id: 'm_' + Math.random().toString(36).substring(2, 11),
       churchId: currentChurchId,
       status: 'Active'
     };
-    
-    // Save to list
-    const updated = [newMember, ...allMembers];
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+
+    // Save to server
+    const res = await fetch('/api/members', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newMember)
+    });
+
+    if (!res.ok) {
+      throw new Error('Failed to register member on backend.');
+    }
 
     // Register a system activity
-    activityService.addActivity({
+    await activityService.addActivity({
       type: 'registration',
       description: `${newMember.fullName} registered as a new member of ${newMember.mapName}.`,
       timestamp: new Date().toISOString().split('T')[0],
       memberName: newMember.fullName
     }, currentChurchId);
 
+    // Update cache
+    await this.fetchMembers();
+
     return newMember;
   },
 
-  updateMember(id: string, updates: Partial<Member>): Member {
-    const allMembers = initializeMembers();
-    const index = allMembers.findIndex(m => m.id === id);
-    if (index === -1) {
-      throw new Error(`Member with id ${id} not found.`);
+  async updateMember(id: string, updates: Partial<Member>): Promise<Member> {
+    const res = await fetch(`/api/members/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates)
+    });
+
+    if (!res.ok) {
+      throw new Error('Failed to update member details on backend.');
     }
 
-    const session = authService.getCurrentSession();
-    if (session && allMembers[index].churchId !== session.churchId) {
-      throw new Error("Access denied: Tenant mismatch.");
-    }
-
-    const updatedMember = { ...allMembers[index], ...updates };
-    allMembers[index] = updatedMember;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(allMembers));
-    return updatedMember;
+    const updated = await res.json();
+    await this.fetchMembers();
+    return updated;
   }
 };
-
-// Import dynamically to avoid circular dependency
-import { activityService } from './activityService';
