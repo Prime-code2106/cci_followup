@@ -12,24 +12,30 @@ try {
     firebaseConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
   }
 
+  let app;
   if (getApps().length === 0) {
-    initializeApp({
+    app = initializeApp({
       projectId: firebaseConfig?.projectId || process.env.GOOGLE_CLOUD_PROJECT || 'organic-bus-b6ppv',
     });
+  } else {
+    app = getApps()[0];
   }
 
   // Use customized databaseId if present, otherwise default
   firestore = firebaseConfig?.firestoreDatabaseId 
-    ? getFirestore(firebaseConfig.firestoreDatabaseId) 
-    : getFirestore();
+    ? getFirestore(app, firebaseConfig.firestoreDatabaseId) 
+    : getFirestore(app);
 
-  console.log('Firebase Admin initialized successfully.');
+  console.log('Firebase Admin initialized successfully with database:', firebaseConfig?.firestoreDatabaseId || '(default)');
 } catch (err) {
   console.error('Failed to initialize Firebase Admin, using default app fallback...', err);
+  let app;
   if (getApps().length === 0) {
-    initializeApp();
+    app = initializeApp();
+  } else {
+    app = getApps()[0];
   }
-  firestore = getFirestore();
+  firestore = getFirestore(app);
 }
 
 export const db = firestore;
