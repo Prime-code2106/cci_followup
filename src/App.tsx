@@ -128,6 +128,25 @@ export default function App() {
       setPrayerRequests(p);
       setFollowUps(f);
       setRecentActivities(act);
+
+      // Automated birthday trigger dispatch
+      try {
+        fetch('/api/birthdays/trigger', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ churchId: activeChurchId })
+        }).then(res => {
+          if (res.ok) {
+            res.json().then(data => {
+              if (data.triggeredCount > 0) {
+                activityService.fetchActivities().then(newAct => setRecentActivities(newAct));
+              }
+            });
+          }
+        });
+      } catch (bdayErr) {
+        console.warn("Could not trigger automated birthday greeting dispatch", bdayErr);
+      }
     } catch (err) {
       console.error("Error refreshing fullstack data from server:", err);
       // Fallback to synchronous cached reads
@@ -447,6 +466,9 @@ export default function App() {
           onRoleChange={setCurrentUserRole}
           onQuickNav={handleViewChange}
           churchName={appSettings.churchName}
+          prayerRequests={prayerRequests}
+          followups={followups}
+          onRefreshData={refreshAllData}
         />
 
         {/* Content Canvas Container */}

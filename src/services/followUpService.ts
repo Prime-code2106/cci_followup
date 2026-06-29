@@ -151,5 +151,36 @@ export const followUpService = {
     } catch (e) {
       console.warn("syncStatus error", e);
     }
+  },
+
+  async setRemindDate(id: string, remindDate: string): Promise<FollowUp> {
+    const list = this.getFollowUps();
+    const current = list.find(f => f.id === id);
+    if (!current) {
+      throw new Error(`Follow-up entry with id ${id} not found.`);
+    }
+
+    const res = await fetch(`/api/follow-ups/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ remindDate })
+    });
+
+    if (!res.ok) {
+      throw new Error('Failed to update follow up remind date on backend.');
+    }
+
+    const updated = await res.json();
+
+    // Log the update activity
+    await activityService.addActivity({
+      type: 'followup',
+      description: `Snoozed follow up notification for ${updated.name} until tomorrow (${remindDate}).`,
+      timestamp: new Date().toISOString().split('T')[0],
+      memberName: updated.name
+    }, updated.churchId);
+
+    await this.fetchFollowUps();
+    return updated;
   }
 };

@@ -69,6 +69,7 @@ export interface FollowUp {
   lastAttendanceDate?: string;
   status: 'Needs Follow Up' | 'Contacted' | 'Visited' | 'Restored';
   notes: FollowUpNote[];
+  remindDate?: string; // YYYY-MM-DD
 }
 
 export interface Church {

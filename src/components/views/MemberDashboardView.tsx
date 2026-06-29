@@ -9,7 +9,8 @@ import {
   User, Check, Phone, Mail, Calendar, Compass, MapPin, 
   Plus, Edit, Clipboard, Sparkles, LogOut, CheckCircle, AlertCircle, HeartHandshake,
   Clock, ShieldAlert, Award, FileText, Gift, Info, QrCode, Bell,
-  Users2, UserCheck, Send, MessageSquare, Heart, Search, CheckCircle2, RefreshCw
+  Users2, UserCheck, Send, MessageSquare, Heart, Search, CheckCircle2, RefreshCw,
+  Cake
 } from 'lucide-react';
 
 interface MemberDashboardViewProps {
@@ -328,6 +329,22 @@ export default function MemberDashboardView({ memberId, onLogout, attendanceHist
 
   const churchSettings = settingsService.getSettings(member.churchId || 'futamap');
 
+  const isBirthdayToday = (() => {
+    if (!member || !member.birthday) return false;
+    const today = new Date();
+    const todayMonth = String(today.getMonth() + 1).padStart(2, '0');
+    const todayDay = String(today.getDate()).padStart(2, '0');
+    const todayMonthDay = `${todayMonth}-${todayDay}`; // "06-29"
+
+    const parts = member.birthday.split('-');
+    if (parts.length >= 2) {
+      const mMonth = parts[1].padStart(2, '0');
+      const mDay = parts[2].padStart(2, '0');
+      return `${mMonth}-${mDay}` === todayMonthDay;
+    }
+    return false;
+  })();
+
   return (
     <div className="min-h-screen bg-slate-50 font-sans flex flex-col justify-between">
       {/* Top Banner Header */}
@@ -451,6 +468,26 @@ export default function MemberDashboardView({ memberId, onLogout, attendanceHist
             {/* 1. PERSONAL INFORMATION CARD (Read-only list representation) */}
             <div className="lg:col-span-2 space-y-6">
               
+              {/* Personal Birthday Greeting Card if it is today */}
+              {isBirthdayToday && (
+                <div className="bg-gradient-to-r from-pink-500 via-purple-500 to-indigo-500 text-white rounded-3xl p-6 shadow-md relative overflow-hidden flex flex-col sm:flex-row items-center gap-4 border border-pink-100 animate-fade-in">
+                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.2),transparent)] opacity-70 pointer-events-none" />
+                  <div className="p-4 bg-white/20 backdrop-blur-md rounded-full text-white shrink-0 shadow-inner">
+                    <Cake className="w-8 h-8 text-pink-100" />
+                  </div>
+                  <div className="space-y-1 relative z-10 text-center sm:text-left">
+                    <div className="flex items-center justify-center sm:justify-start gap-1.5">
+                      <span className="text-[10px] font-black tracking-widest text-pink-200 uppercase">Special Celebration</span>
+                      <span className="text-[8px] font-bold text-white bg-pink-600/50 px-2 py-0.5 rounded-full select-none">Today 🎉</span>
+                    </div>
+                    <h3 className="text-lg font-black tracking-tight">Happy Birthday, {member.fullName}! 🎂</h3>
+                    <p className="text-xs text-pink-100/90 leading-relaxed font-medium">
+                      The entire church and MAP cell celebrate you today! We pray for sound health, divine favor, and supernatural increase in your new year. We have dispatched an automated birthday email greeting to your profile! Have an amazing day!
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {/* Care Notifications & Engagement Reminders */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="bg-amber-50/70 border border-amber-100 rounded-3xl p-5 flex items-start gap-3 shadow-2xs relative overflow-hidden">

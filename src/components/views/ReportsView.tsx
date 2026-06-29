@@ -13,7 +13,7 @@ import {
   ResponsiveContainer,
   CartesianGrid
 } from 'recharts';
-import { BarChart3, Users, HeartHandshake, PhoneCall, TrendingUp, Sparkles } from 'lucide-react';
+import { BarChart3, Users, HeartHandshake, PhoneCall, TrendingUp, Sparkles, Download } from 'lucide-react';
 
 interface ReportsViewProps {
   members: Member[];
@@ -69,12 +69,97 @@ export default function ReportsView({
     };
   }, [members, visitors, prayerRequests, followups]);
 
+  // CSV Export utility
+  const exportToCSV = (data: any[], filename: string) => {
+    if (data.length === 0) return;
+    const headers = Object.keys(data[0]);
+    const csvRows = [
+      headers.join(','),
+      ...data.map(row =>
+        headers.map(fieldName => {
+          const val = row[fieldName];
+          const valStr = val === undefined || val === null ? '' : String(val);
+          const escaped = valStr.replace(/"/g, '""');
+          return `"${escaped}"`;
+        }).join(',')
+      )
+    ];
+
+    const csvContent = csvRows.join("\n");
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExportMembers = () => {
+    const dataToExport = members.map(m => ({
+      'ID': m.id,
+      'Full Name': m.fullName,
+      'Email': m.email || '',
+      'Phone Number': m.phoneNumber,
+      'Gender': m.gender,
+      'Department': m.department,
+      'Level': m.level,
+      'Faculty': m.faculty,
+      'Residence': m.residence,
+      'Birthday': m.birthday,
+      'Date Joined': m.dateJoined,
+      'Status': m.status,
+      'MAP Association': m.mapName,
+      'Bio': m.bio || '',
+      'Interests': m.interests?.join(', ') || '',
+      'Ministry Involvement': m.ministryInvolvement?.join(', ') || ''
+    }));
+    exportToCSV(dataToExport, `members_report_${new Date().toISOString().split('T')[0]}.csv`);
+  };
+
+  const handleExportAttendance = () => {
+    const dataToExport = attendance.map(a => {
+      const member = members.find(m => m.id === a.memberId);
+      return {
+        'Attendance ID': a.id,
+        'Member ID': a.memberId,
+        'Member Name': member ? member.fullName : 'Unknown Member',
+        'Member Email': member?.email || '',
+        'Member Phone': member?.phoneNumber || '',
+        'MAP Association': member?.mapName || '',
+        'Date': a.date,
+        'Service Type': a.serviceType
+      };
+    });
+    exportToCSV(dataToExport, `attendance_report_${new Date().toISOString().split('T')[0]}.csv`);
+  };
+
   return (
     <div className="space-y-6 animate-fade-in font-sans">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-slate-150 tracking-tight font-sans">Care & Discipleship Reports</h1>
-        <p className="text-xs text-gray-500 font-medium">Analytical reports tracking active retention, prayer intercession grids, and outreach benchmarks.</p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-150 tracking-tight font-sans">Care & Discipleship Reports</h1>
+          <p className="text-xs text-gray-500 font-medium">Analytical reports tracking active retention, prayer intercession grids, and outreach benchmarks.</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={handleExportMembers}
+            className="inline-flex items-center space-x-1.5 px-4 py-2 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 transition-colors rounded-xl border border-slate-700/50 shadow-sm cursor-pointer"
+          >
+            <Download className="w-4 h-4" />
+            <span>Export Members CSV</span>
+          </button>
+          <button
+            onClick={handleExportAttendance}
+            className="inline-flex items-center space-x-1.5 px-4 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-500 transition-colors rounded-xl border border-blue-500/50 shadow-sm cursor-pointer"
+          >
+            <Download className="w-4 h-4" />
+            <span>Export Attendance CSV</span>
+          </button>
+        </div>
       </div>
 
       {/* Bento Stats Counters */}

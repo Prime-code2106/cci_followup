@@ -27,7 +27,9 @@ import {
   MessageCircle,
   Send,
   ShieldAlert,
-  Flame
+  Flame,
+  Camera,
+  Upload
 } from 'lucide-react';
 
 interface MemberProfileViewProps {
@@ -57,6 +59,87 @@ export default function MemberProfileView({
   const [chatMessages, setChatMessages] = useState<FellowshipNote[]>([]);
   const [messageText, setMessageText] = useState('');
   const [selectedSenderId, setSelectedSenderId] = useState<string>('');
+
+  // Camera and Avatar upload states
+  const [showAvatarModal, setShowAvatarModal] = useState(false);
+  const [avatarMethod, setAvatarMethod] = useState<'upload' | 'camera'>('upload');
+  const [stream, setStream] = useState<MediaStream | null>(null);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const videoRef = React.useRef<HTMLVideoElement>(null);
+
+  const startCamera = async () => {
+    setCameraError(null);
+    setPreviewImage(null);
+    try {
+      const mediaStream = await navigator.mediaDevices.getUserMedia({
+        video: { width: 300, height: 300, facingMode: 'user' }
+      });
+      setStream(mediaStream);
+      setTimeout(() => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = mediaStream;
+        }
+      }, 150);
+    } catch (err: any) {
+      console.error(err);
+      setCameraError('Unable to access camera. Please check your browser permissions.');
+    }
+  };
+
+  const stopCamera = () => {
+    if (stream) {
+      stream.getTracks().forEach(track => track.stop());
+      setStream(null);
+    }
+  };
+
+  const handleCapture = () => {
+    if (videoRef.current) {
+      const canvas = document.createElement('canvas');
+      canvas.width = 300;
+      canvas.height = 300;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(videoRef.current, 0, 0, 300, 300);
+        const dataUrl = canvas.toDataURL('image/jpeg');
+        setPreviewImage(dataUrl);
+        stopCamera();
+      }
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setPreviewImage(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleSaveAvatar = async () => {
+    if (!previewImage) return;
+    try {
+      await memberService.updateMember(memberId, { profilePicture: previewImage });
+      setShowAvatarModal(false);
+      setPreviewImage(null);
+      stopCamera();
+      onUpdateMember();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [stream]);
 
   const currentMemberSess = useMemo(() => {
     return authService.getCurrentMemberSession();
@@ -378,8 +461,29 @@ export default function MemberProfileView({
           {/* Column 1: Core Profile Info */}
           <div className="space-y-6">
             <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-xs text-center space-y-4">
-              <div className="h-20 w-20 rounded-full bg-blue-50/75 border border-blue-105 text-blue-650 flex items-center justify-center font-bold text-2xl mx-auto uppercase">
-                {member.fullName.charAt(0)}{member.fullName.split(' ')[1]?.charAt(0) || ''}
+              <div className="relative group w-24 h-24 mx-auto">
+                <div className="h-24 w-24 rounded-full bg-blue-50/75 border border-blue-105 text-blue-650 flex items-center justify-center font-bold text-3xl mx-auto uppercase overflow-hidden shadow-inner">
+                  {member.profilePicture ? (
+                    <img src={member.profilePicture} alt="Profile" className="w-full h-full object-cover animate-fade-in" referrerPolicy="no-referrer" />
+                  ) : (
+                    <span>
+                      {member.fullName.charAt(0)}{member.fullName.split(' ')[1]?.charAt(0) || ''}
+                    </span>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPreviewImage(null);
+                    setCameraError(null);
+                    setAvatarMethod('upload');
+                    setShowAvatarModal(true);
+                  }}
+                  className="absolute bottom-0 right-0 p-2 bg-blue-600 text-white rounded-full hover:bg-blue-700 shadow-md transition-all cursor-pointer border border-white flex items-center justify-center"
+                  title="Change Profile Photo"
+                >
+                  <Camera className="w-4.5 h-4.5" />
+                </button>
               </div>
               <div>
                 <h2 className="text-xl font-bold text-slate-900 leading-tight">{member.fullName}</h2>
@@ -716,6 +820,165 @@ export default function MemberProfileView({
                   <span>Send</span>
                 </button>
               </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Profile Photo Customizer Modal */}
+      {showAvatarModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 animate-fade-in" style={{ zIndex: 9999 }}>
+          <div className="bg-white w-full max-w-md rounded-3xl border border-slate-100 shadow-2xl flex flex-col overflow-hidden animate-scale-up">
+            {/* Header */}
+            <div className="p-4.5 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
+              <div className="flex items-center gap-2">
+                <Camera className="w-5 h-5 text-blue-600" />
+                <h3 className="text-sm font-bold text-slate-900">Customise Profile Avatar</h3>
+              </div>
+              <button 
+                onClick={() => {
+                  stopCamera();
+                  setShowAvatarModal(false);
+                }}
+                className="p-1.5 hover:bg-slate-100 rounded-xl text-slate-400 hover:text-slate-750 transition-all cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Selector Tabs */}
+            <div className="flex border-b border-slate-100 text-xs">
+              <button
+                type="button"
+                onClick={() => {
+                  stopCamera();
+                  setAvatarMethod('upload');
+                  setPreviewImage(null);
+                  setCameraError(null);
+                }}
+                className={`flex-1 py-3 text-center font-bold border-b-2 transition-colors cursor-pointer ${
+                  avatarMethod === 'upload'
+                    ? 'border-blue-600 text-blue-600 bg-blue-50/10'
+                    : 'border-transparent text-gray-500 hover:text-gray-800'
+                }`}
+              >
+                Upload Photo File
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAvatarMethod('camera');
+                  setPreviewImage(null);
+                  startCamera();
+                }}
+                className={`flex-1 py-3 text-center font-bold border-b-2 transition-colors cursor-pointer ${
+                  avatarMethod === 'camera'
+                    ? 'border-blue-600 text-blue-600 bg-blue-50/10'
+                    : 'border-transparent text-gray-500 hover:text-gray-800'
+                }`}
+              >
+                Capture with Camera
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 space-y-4">
+              {avatarMethod === 'upload' ? (
+                <div className="space-y-4">
+                  <div className="border-2 border-dashed border-gray-200 hover:border-blue-500 rounded-2xl p-6 text-center cursor-pointer relative group transition-colors">
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      onChange={handleFileChange}
+                      className="absolute inset-0 opacity-0 cursor-pointer" 
+                    />
+                    <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2 group-hover:text-blue-550 transition-colors" />
+                    <p className="text-xs font-bold text-gray-700">Click or Drag Image Here</p>
+                    <p className="text-[10px] text-gray-400 mt-1">Supports PNG, JPG up to 5MB</p>
+                  </div>
+
+                  {previewImage && (
+                    <div className="space-y-2">
+                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest text-center font-mono">Preview Selected Avatar</p>
+                      <div className="w-32 h-32 rounded-full border-4 border-blue-50 mx-auto overflow-hidden shadow-md">
+                        <img src={previewImage} alt="Preview" className="w-full h-full object-cover" />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {cameraError ? (
+                    <div className="p-3 bg-red-50 border border-red-150 text-red-650 text-xs rounded-xl flex items-start gap-2">
+                      <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5" />
+                      <span>{cameraError}</span>
+                    </div>
+                  ) : !previewImage ? (
+                    <div className="space-y-3">
+                      <div className="w-full aspect-square max-w-[280px] bg-black rounded-2xl mx-auto overflow-hidden relative shadow-inner border border-gray-150">
+                        <video 
+                          ref={videoRef} 
+                          autoPlay 
+                          playsInline 
+                          className="w-full h-full object-cover scale-x-[-1]" 
+                        />
+                        <div className="absolute top-2 left-2 bg-red-500/20 text-red-455 border border-red-500/30 px-2 py-0.5 rounded-full text-[9px] uppercase font-mono font-bold flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-ping" />
+                          Live Lens
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleCapture}
+                        className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow"
+                      >
+                        <Camera className="w-4 h-4" />
+                        <span>Snap Profile Photo</span>
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-3 text-center">
+                      <p className="text-[10px] font-bold text-gray-450 uppercase tracking-widest font-mono">Snapshot Captured!</p>
+                      <div className="w-32 h-32 rounded-full border-4 border-emerald-50 mx-auto overflow-hidden shadow-md">
+                        <img src={previewImage} alt="Snapshot Preview" className="w-full h-full object-cover" />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPreviewImage(null);
+                          startCamera();
+                        }}
+                        className="text-xs text-blue-650 hover:underline font-bold cursor-pointer"
+                      >
+                        Retake Snapshot
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Footer Actions */}
+            <div className="p-4.5 border-t border-slate-100 bg-slate-50/50 flex justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => {
+                  stopCamera();
+                  setShowAvatarModal(false);
+                }}
+                className="px-4 py-2 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-bold rounded-xl transition-all cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveAvatar}
+                disabled={!previewImage}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow cursor-pointer flex items-center gap-1.5"
+              >
+                <Check className="w-4 h-4" />
+                <span>Save New Avatar</span>
+              </button>
             </div>
           </div>
         </div>

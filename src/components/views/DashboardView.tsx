@@ -58,7 +58,10 @@ export default function DashboardView({
     }).length;
 
     // Pending Follow-Ups
-    const pendingFollowUps = followups.filter(f => f.status === 'Needs Follow Up').length;
+    const todayStr = new Date().toISOString().split('T')[0];
+    const pendingFollowUps = followups.filter(f => 
+      f.status === 'Needs Follow Up' && (!f.remindDate || f.remindDate <= todayStr)
+    ).length;
 
     // Upcoming Birthdays
     // Birthdays in June

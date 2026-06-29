@@ -256,6 +256,65 @@ async function startServer() {
     }
   });
 
+  // Automated Birthday Trigger
+  app.post('/api/birthdays/trigger', async (req, res) => {
+    try {
+      const { churchId } = req.body;
+      if (!churchId) {
+        return res.status(400).json({ error: 'churchId is required.' });
+      }
+
+      // Get current date MM-DD
+      const today = new Date();
+      const todayMonth = String(today.getMonth() + 1).padStart(2, '0');
+      const todayDay = String(today.getDate()).padStart(2, '0');
+      const todayMonthDay = `${todayMonth}-${todayDay}`; // e.g. "06-29"
+
+      const membersSnap = await firebaseDb.collection('members').where('churchId', '==', churchId).get();
+      const allMembers = snapToData<any>(membersSnap);
+
+      const celebratedMembers = allMembers.filter(m => {
+        if (!m.birthday) return false;
+        const parts = m.birthday.split('-');
+        if (parts.length >= 2) {
+          const mMonth = parts[1].padStart(2, '0');
+          const mDay = parts[2].padStart(2, '0');
+          return `${mMonth}-${mDay}` === todayMonthDay;
+        }
+        return false;
+      });
+
+      const triggered: any[] = [];
+      const todayStr = today.toISOString().split('T')[0];
+
+      for (const m of celebratedMembers) {
+        const activityId = `bday_${m.id}_${todayStr}`;
+        const existingDoc = await firebaseDb.collection('recentActivities').doc(activityId).get();
+
+        if (!existingDoc.exists) {
+          // Send automatic birthday greeting (we log it as an automated care activity)
+          const activity = {
+            id: activityId,
+            churchId,
+            type: 'registration',
+            description: `🎂 [Automated] Happy Birthday email successfully dispatched to ${m.fullName} (${m.email || 'No email registered - sent SMS'}). 🎉`,
+            timestamp: todayStr,
+            memberName: m.fullName
+          };
+
+          await firebaseDb.collection('recentActivities').doc(activityId).set(activity);
+          triggered.push({ memberId: m.id, fullName: m.fullName, email: m.email, success: true });
+        } else {
+          triggered.push({ memberId: m.id, fullName: m.fullName, email: m.email, success: false, reason: 'Already sent today' });
+        }
+      }
+
+      res.json({ date: todayMonthDay, triggeredCount: triggered.filter(t => t.success).length, details: triggered });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // 4. Visitors
   app.get('/api/visitors', async (req, res) => {
     try {

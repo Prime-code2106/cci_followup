@@ -1,6 +1,6 @@
 {
   "name": "AssemblyPortal",
   "description": "A multi-tenant platform for managing members, visitors, attendance and follow-up activities across churches and organizations.",
-  "requestFramePermissions": [],
+  "requestFramePermissions": ["camera"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

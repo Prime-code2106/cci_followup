@@ -15,7 +15,9 @@ import {
   User,
   Activity,
   UserX,
-  PhoneCall
+  PhoneCall,
+  Clock,
+  BellOff
 } from 'lucide-react';
 
 interface FollowUpViewProps {
@@ -55,6 +57,20 @@ export default function FollowUpView({
     if (!activeEntry) return;
     try {
       followUpService.updateStatus(activeEntry.id, status);
+      onUpdateFollowUp();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  // Snooze notification to tomorrow
+  const handleRemindTomorrow = async () => {
+    if (!activeEntry) return;
+    try {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const tomorrowStr = tomorrow.toISOString().split('T')[0];
+      await followUpService.setRemindDate(activeEntry.id, tomorrowStr);
       onUpdateFollowUp();
     } catch (err) {
       console.error(err);
@@ -242,7 +258,24 @@ export default function FollowUpView({
                   >
                     Restored / Integrated
                   </button>
+
+                  {activeEntry.status !== 'Restored' && (
+                    <button
+                      onClick={handleRemindTomorrow}
+                      className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-amber-550 hover:bg-amber-600 bg-amber-500 text-white shadow-xs transition-all flex items-center gap-1 cursor-pointer"
+                    >
+                      <Clock className="w-3.5 h-3.5" />
+                      <span>Remind me tomorrow</span>
+                    </button>
+                  )}
                 </div>
+
+                {activeEntry.remindDate && (
+                  <div className="mt-2 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-100/60 p-2.5 rounded-xl flex items-center gap-1.5 font-mono">
+                    <Clock className="w-3.5 h-3.5 text-amber-500 shrink-0 animate-pulse" />
+                    <span>Notification re-queued! Snoozed until: {activeEntry.remindDate}</span>
+                  </div>
+                )}
               </div>
 
               {/* Context Reasons Card */}
