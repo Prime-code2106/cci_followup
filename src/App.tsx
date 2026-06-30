@@ -11,6 +11,7 @@ import { activityService } from './services/activityService';
 import { settingsService } from './services/settingsService';
 import { authService } from './services/authService';
 import { fellowshipService } from './services/fellowshipService';
+import { socketService } from './services/socketService';
 
 // Base Components
 import Sidebar from './components/Sidebar';
@@ -162,6 +163,15 @@ export default function App() {
   // Run initial state loading
   useEffect(() => {
     refreshAllData();
+  }, [refreshAllData]);
+
+  // Connect to realtime DB changes over WebSocket
+  useEffect(() => {
+    const unsubscribe = socketService.onDbChange((data) => {
+      console.log(`📡 Realtime update received for table "${data.table}". Refreshing App state...`);
+      refreshAllData();
+    });
+    return () => unsubscribe();
   }, [refreshAllData]);
 
   // Darkmode sync
@@ -384,6 +394,7 @@ export default function App() {
         return (
           <FollowUpView
             followups={followups}
+            members={members}
             onUpdateFollowUp={refreshAllData}
           />
         );

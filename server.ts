@@ -4,6 +4,8 @@ import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
 import * as dotenv from 'dotenv';
 import { dbService } from './src/services/dbService.ts';
+import { createServer } from 'http';
+import { Server } from 'socket.io';
 
 // Load environment variables
 dotenv.config();
@@ -14,6 +16,26 @@ const __dirname = path.dirname(__filename);
 async function startServer() {
   const app = express();
   const PORT = 3000;
+
+  const httpServer = createServer(app);
+  const io = new Server(httpServer, {
+    cors: {
+      origin: "*",
+      methods: ["GET", "POST", "PUT", "DELETE"]
+    }
+  });
+
+  io.on('connection', (socket) => {
+    console.log('🔌 Client connected to Realtime WebSocket:', socket.id);
+    socket.on('disconnect', () => {
+      console.log('🔌 Client disconnected:', socket.id);
+    });
+  });
+
+  const broadcastDbChange = (table: string) => {
+    console.log(`📡 Broadcasting change on table: ${table}`);
+    io.emit('db_changed', { table });
+  };
 
   // Middleware to parse JSON
   app.use(express.json());
@@ -63,6 +85,9 @@ async function startServer() {
         themeColor: '#2563eb',
         logoName: logoName || `${name} Admin`
       });
+
+      broadcastDbChange('churches');
+      broadcastDbChange('appSettings');
 
       res.status(201).json({ id, name });
     } catch (err: any) {
@@ -151,6 +176,7 @@ async function startServer() {
 
         // Save passwordHash on first login
         await dbService.docUpdate('members', matched.id, { passwordHash });
+        broadcastDbChange('members');
       }
 
       res.json({
@@ -189,6 +215,7 @@ async function startServer() {
       }
 
       await dbService.docUpdate('members', matched.id, { passwordHash });
+      broadcastDbChange('members');
       res.json({ success: true, message: 'Password updated successfully.' });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -228,6 +255,7 @@ async function startServer() {
     try {
       const memberData = req.body;
       await dbService.docSet('members', memberData.id, memberData);
+      broadcastDbChange('members');
       res.status(201).json(memberData);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -237,6 +265,7 @@ async function startServer() {
   app.put('/api/members/:id', async (req, res) => {
     try {
       const updated = await dbService.docUpdate('members', req.params.id, req.body);
+      broadcastDbChange('members');
       res.json(updated);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -289,6 +318,7 @@ async function startServer() {
           };
 
           await dbService.docSet('recentActivities', activityId, activity);
+          broadcastDbChange('recentActivities');
           triggered.push({ memberId: m.id, fullName: m.fullName, email: m.email, success: true });
         } else {
           triggered.push({ memberId: m.id, fullName: m.fullName, email: m.email, success: false, reason: 'Already sent today' });
@@ -319,6 +349,7 @@ async function startServer() {
     try {
       const visitorData = req.body;
       await dbService.docSet('visitors', visitorData.id, visitorData);
+      broadcastDbChange('visitors');
       res.status(201).json(visitorData);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -328,6 +359,7 @@ async function startServer() {
   app.put('/api/visitors/:id', async (req, res) => {
     try {
       const updated = await dbService.docUpdate('visitors', req.params.id, req.body);
+      broadcastDbChange('visitors');
       res.json(updated);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -360,6 +392,7 @@ async function startServer() {
       }
 
       await dbService.docSet('attendance', attData.id, attData);
+      broadcastDbChange('attendance');
       res.status(201).json(attData);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -369,6 +402,7 @@ async function startServer() {
   app.delete('/api/attendance/:id', async (req, res) => {
     try {
       await dbService.docDelete('attendance', req.params.id);
+      broadcastDbChange('attendance');
       res.json({ success: true });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -393,6 +427,7 @@ async function startServer() {
     try {
       const prayerData = req.body;
       await dbService.docSet('prayerRequests', prayerData.id, prayerData);
+      broadcastDbChange('prayerRequests');
       res.status(201).json(prayerData);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -402,6 +437,7 @@ async function startServer() {
   app.put('/api/prayer-requests/:id', async (req, res) => {
     try {
       const updated = await dbService.docUpdate('prayerRequests', req.params.id, req.body);
+      broadcastDbChange('prayerRequests');
       res.json(updated);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -426,6 +462,7 @@ async function startServer() {
     try {
       const fuData = req.body;
       await dbService.docSet('followUps', fuData.id, fuData);
+      broadcastDbChange('followUps');
       res.status(201).json(fuData);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -435,6 +472,7 @@ async function startServer() {
   app.put('/api/follow-ups/:id', async (req, res) => {
     try {
       const updated = await dbService.docUpdate('followUps', req.params.id, req.body);
+      broadcastDbChange('followUps');
       res.json(updated);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -459,6 +497,7 @@ async function startServer() {
     try {
       const activityData = req.body;
       await dbService.docSet('recentActivities', activityData.id, activityData);
+      broadcastDbChange('recentActivities');
       res.status(201).json(activityData);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -483,6 +522,7 @@ async function startServer() {
     try {
       const connData = req.body;
       await dbService.docSet('fellowshipConnections', connData.id, connData);
+      broadcastDbChange('fellowshipConnections');
       res.status(201).json(connData);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -492,6 +532,7 @@ async function startServer() {
   app.put('/api/fellowship/connections/:id', async (req, res) => {
     try {
       const updated = await dbService.docUpdate('fellowshipConnections', req.params.id, req.body);
+      broadcastDbChange('fellowshipConnections');
       res.json(updated);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -501,6 +542,7 @@ async function startServer() {
   app.delete('/api/fellowship/connections/:id', async (req, res) => {
     try {
       await dbService.docDelete('fellowshipConnections', req.params.id);
+      broadcastDbChange('fellowshipConnections');
       res.json({ success: true });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -525,6 +567,7 @@ async function startServer() {
     try {
       const noteData = req.body;
       await dbService.docSet('fellowshipNotes', noteData.id, noteData);
+      broadcastDbChange('fellowshipNotes');
       res.status(201).json(noteData);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -562,6 +605,7 @@ async function startServer() {
         logoName
       };
       await dbService.docSet('appSettings', req.params.churchId, updated);
+      broadcastDbChange('appSettings');
       res.json(updated);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -584,7 +628,7 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
+  httpServer.listen(PORT, "0.0.0.0", () => {
     console.log(`Server successfully started with Supabase backend. Running fullstack port: http://localhost:${PORT}`);
   });
 }

@@ -18,6 +18,34 @@ const tableMap: Record<string, string> = {
 
 const JSON_DB_PATH = path.join(process.cwd(), 'database.json');
 
+function camelToSnake(str: string): string {
+  return str.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
+}
+
+function snakeToCamel(str: string): string {
+  return str.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
+}
+
+function mapShallowKeysToSnake(obj: any): any {
+  if (obj === null || typeof obj !== 'object' || Array.isArray(obj)) return obj;
+  const result: Record<string, any> = {};
+  for (const key of Object.keys(obj)) {
+    const snakeKey = camelToSnake(key);
+    result[snakeKey] = obj[key];
+  }
+  return result;
+}
+
+function mapShallowKeysToCamel(obj: any): any {
+  if (obj === null || typeof obj !== 'object' || Array.isArray(obj)) return obj;
+  const result: Record<string, any> = {};
+  for (const key of Object.keys(obj)) {
+    const camelKey = snakeToCamel(key);
+    result[camelKey] = obj[key];
+  }
+  return result;
+}
+
 function cleanErrorMessage(err: any): string {
   if (!err) return 'Unknown error';
   const msg = err.message || String(err);
@@ -105,7 +133,7 @@ class DatabaseService {
         .from(tableName)
         .select('*');
       if (error) throw error;
-      return data || [];
+      return (data || []).map(row => mapShallowKeysToCamel(row));
     } catch (err: any) {
       this.logFallback(tableName, 'getCollection', err);
       const dbData = this.readLocalJson();
@@ -131,15 +159,16 @@ class DatabaseService {
 
     // Supabase Backend query
     try {
+      const dbField = camelToSnake(field);
       let query = this.supabase!.from(tableName).select('*');
       if (operator === '==') {
-        query = query.eq(field, value);
+        query = query.eq(dbField, value);
       } else if (operator === '!=') {
-        query = query.neq(field, value);
+        query = query.neq(dbField, value);
       }
       const { data, error } = await query;
       if (error) throw error;
-      return data || [];
+      return (data || []).map(row => mapShallowKeysToCamel(row));
     } catch (err: any) {
       this.logFallback(tableName, `where filter (${field} ${operator} ${value})`, err);
       const dbData = this.readLocalJson();
@@ -173,7 +202,7 @@ class DatabaseService {
         .eq('id', id)
         .maybeSingle();
       if (error) throw error;
-      return data || null;
+      return data ? mapShallowKeysToCamel(data) : null;
     } catch (err: any) {
       this.logFallback(tableName, 'docGet', err);
       const dbData = this.readLocalJson();
@@ -206,9 +235,10 @@ class DatabaseService {
 
     // Supabase Backend insert/upsert
     try {
+      const dbRecord = mapShallowKeysToSnake(record);
       const { error } = await this.supabase!
         .from(tableName)
-        .upsert(record);
+        .upsert(dbRecord);
       if (error) throw error;
     } catch (err: any) {
       this.logFallback(tableName, 'docSet', err);
@@ -241,14 +271,15 @@ class DatabaseService {
 
     // Supabase Backend update
     try {
+      const dbUpdateData = mapShallowKeysToSnake(updateData);
       const { data, error } = await this.supabase!
         .from(tableName)
-        .update(updateData)
+        .update(dbUpdateData)
         .eq('id', id)
         .select()
         .maybeSingle();
       if (error) throw error;
-      return data || updatedRecord;
+      return data ? mapShallowKeysToCamel(data) : updatedRecord;
     } catch (err: any) {
       this.logFallback(tableName, 'docUpdate', err);
       return updatedRecord;

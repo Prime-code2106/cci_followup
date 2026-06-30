@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react';
-import { FollowUp, FollowUpNote } from '../../types';
+import React, { useState, useMemo, useEffect } from 'react';
+import { FollowUp, FollowUpNote, Member } from '../../types';
 import { followUpService } from '../../services/followUpService';
 import StatusBadge from '../StatusBadge';
 import SearchBar from '../SearchBar';
@@ -17,16 +17,55 @@ import {
   UserX,
   PhoneCall,
   Clock,
-  BellOff
+  BellOff,
+  Mail,
+  Send
 } from 'lucide-react';
+
+interface EmailTemplate {
+  subject: string;
+  body: string;
+}
+
+const getEmailTemplate = (name: string, status: FollowUp['status']): EmailTemplate => {
+  switch (status) {
+    case 'Needs Follow Up':
+      return {
+        subject: `Thinking of You & Checking In - FUTA MAP`,
+        body: `Hello ${name},\n\nWe missed you at our recent fellowship gatherings! We wanted to check in and see how you are doing.\n\nPlease let us know if there is anything we can support you with, or if you have any prayer requests.\n\nWarm regards,\nFUTA MAP Team`
+      };
+    case 'Contacted':
+      return {
+        subject: `Great Connecting with You! - FUTA MAP`,
+        body: `Hello ${name},\n\nIt was wonderful connecting with you recently! We are so glad to have you as part of our fellowship community.\n\nIf you have any questions, need guidance, or would like to get more involved, feel free to reach out.\n\nBlessings,\nFUTA MAP Team`
+      };
+    case 'Visited':
+      return {
+        subject: `Thank You for Welcoming Us! - FUTA MAP`,
+        body: `Hello ${name},\n\nThank you so much for welcoming us into your home during our recent pastoral visit! It was a true blessing spending time with you.\n\nWe are praying for you and look forward to seeing you at our next corporate assembly.\n\nWarm regards,\nFUTA MAP Team`
+      };
+    case 'Restored':
+      return {
+        subject: `Welcome Back! - FUTA MAP`,
+        body: `Hello ${name},\n\nWe are absolutely overjoyed to see you active in fellowship again! Your presence brings so much light and encouragement to our church family.\n\nLet's continue to grow together in faith and love.\n\nWith love and blessings,\nFUTA MAP Team`
+      };
+    default:
+      return {
+        subject: `Checking In - FUTA MAP`,
+        body: `Hello ${name},\n\nWe wanted to reach out, check in, and see how you are doing. Hope you are having a wonderful week!\n\nBest regards,\nFUTA MAP Team`
+      };
+  }
+};
 
 interface FollowUpViewProps {
   followups: FollowUp[];
+  members?: Member[];
   onUpdateFollowUp: () => void; // State refresh trigger
 }
 
 export default function FollowUpView({
   followups,
+  members = [],
   onUpdateFollowUp
 }: FollowUpViewProps) {
   const [search, setSearch] = useState('');
@@ -35,6 +74,12 @@ export default function FollowUpView({
     followups[0]?.id || null
   );
   const [newNoteText, setNewNoteText] = useState('');
+
+  // Email Composer states
+  const [showEmailComposer, setShowEmailComposer] = useState(false);
+  const [recipientEmail, setRecipientEmail] = useState('');
+  const [emailSubject, setEmailSubject] = useState('');
+  const [emailBody, setEmailBody] = useState('');
 
   // Filter list
   const filteredFollowUps = useMemo(() => {
@@ -51,6 +96,24 @@ export default function FollowUpView({
     if (!selectedFollowUpId) return null;
     return followups.find(f => f.id === selectedFollowUpId) || null;
   }, [followups, selectedFollowUpId]);
+
+  // Find associated member to look up email
+  const associatedMember = useMemo(() => {
+    if (!activeEntry || !members) return null;
+    return members.find(m => m.id === activeEntry.id || m.fullName.toLowerCase() === activeEntry.name.toLowerCase()) || null;
+  }, [activeEntry, members]);
+
+  // Load selected template details on target change or status update
+  useEffect(() => {
+    if (activeEntry) {
+      const email = associatedMember?.email || '';
+      setRecipientEmail(email);
+
+      const template = getEmailTemplate(activeEntry.name, activeEntry.status);
+      setEmailSubject(template.subject);
+      setEmailBody(template.body);
+    }
+  }, [activeEntry, associatedMember]);
 
   // Adjust status
   const handleStatusUpdate = (status: FollowUp['status']) => {
@@ -190,7 +253,7 @@ export default function FollowUpView({
                   </div>
                   <div className="ml-3.5">
                     <h3 className="text-lg font-bold text-gray-900 leading-tight">{activeEntry.name}</h3>
-                    <div className="flex items-center text-xs text-gray-500 mt-1.5 gap-2.5">
+                    <div className="flex items-center text-xs text-gray-500 mt-1.5 gap-2.5 flex-wrap">
                       <span className="font-mono">{activeEntry.phoneNumber}</span>
                       <a
                         href={`https://wa.me/${activeEntry.phoneNumber.replace(/[^0-9]/g, '').replace(/^0/, '234')}?text=${encodeURIComponent(`Hello ${activeEntry.name},`)}`}
@@ -202,6 +265,19 @@ export default function FollowUpView({
                         <MessageCircle className="w-3.5 h-3.5 text-emerald-600 fill-emerald-600/20 shrink-0" />
                         <span>Chat on WhatsApp</span>
                       </a>
+
+                      <button
+                        onClick={() => setShowEmailComposer(!showEmailComposer)}
+                        className={`flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-lg font-bold border transition-colors cursor-pointer ${
+                          showEmailComposer
+                            ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                            : 'bg-blue-50 text-blue-700 border-blue-150 hover:bg-blue-100'
+                        }`}
+                        title="Compose Outreach Email"
+                      >
+                        <Mail className={`w-3.5 h-3.5 shrink-0 ${showEmailComposer ? 'text-white' : 'text-blue-600'}`} />
+                        <span>{showEmailComposer ? 'Close Email Composer' : 'Compose Email'}</span>
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -277,6 +353,77 @@ export default function FollowUpView({
                   </div>
                 )}
               </div>
+
+              {/* Email Composer Panel */}
+              {showEmailComposer && (
+                <div className="p-5 bg-blue-50/15 border border-blue-100 rounded-2xl space-y-4 animate-fade-in shadow-xs">
+                  <div className="flex items-center justify-between border-b border-blue-100/30 pb-2">
+                    <div className="flex items-center gap-2">
+                      <div className="p-1.5 bg-blue-100/50 text-blue-600 rounded-lg">
+                        <Mail className="w-4 h-4" />
+                      </div>
+                      <h4 className="text-xs font-bold text-blue-800 uppercase tracking-wider">Outreach Email Composer</h4>
+                    </div>
+                    <span className="text-[10px] font-bold text-blue-650 bg-blue-50/70 px-2 py-0.5 rounded-md font-mono">
+                      Stage: {activeEntry.status}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                    <div>
+                      <label htmlFor="email-recipient" className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1 font-mono">Recipient Email</label>
+                      <input
+                        id="email-recipient"
+                        type="email"
+                        value={recipientEmail}
+                        onChange={(e) => setRecipientEmail(e.target.value)}
+                        placeholder="e.g. member@domain.com"
+                        className="block w-full px-3 py-1.5 border border-gray-150 rounded-xl text-xs focus:ring-blue-500 bg-white text-gray-850 font-medium"
+                      />
+                      {!associatedMember?.email && (
+                        <p className="text-[9px] text-amber-650 mt-1 font-medium">⚠️ No email registered for this member in directory. Enter manually.</p>
+                      )}
+                    </div>
+
+                    <div>
+                      <label htmlFor="email-subject" className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1 font-mono">Email Subject</label>
+                      <input
+                        id="email-subject"
+                        type="text"
+                        value={emailSubject}
+                        onChange={(e) => setEmailSubject(e.target.value)}
+                        placeholder="Subject..."
+                        className="block w-full px-3 py-1.5 border border-gray-150 rounded-xl text-xs focus:ring-blue-500 bg-white text-gray-850 font-medium"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label htmlFor="email-body" className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1 font-mono">Email Body (Pre-filled template)</label>
+                    <textarea
+                      id="email-body"
+                      rows={5}
+                      value={emailBody}
+                      onChange={(e) => setEmailBody(e.target.value)}
+                      placeholder="Write email body..."
+                      className="block w-full px-3 py-2 border border-gray-150 rounded-xl text-xs focus:ring-blue-500 bg-white text-gray-850 font-sans leading-relaxed"
+                    />
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pt-1">
+                    <p className="text-[10px] text-gray-450 font-medium max-w-full sm:max-w-[65%]">
+                      Clicking "Open in Mail Client" will open your browser's default email program pre-loaded with this template.
+                    </p>
+                    <a
+                      href={`mailto:${recipientEmail}?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(emailBody)}`}
+                      className="inline-flex px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl items-center shadow-xs transition-all cursor-pointer select-none"
+                    >
+                      <Send className="w-3.5 h-3.5 mr-1.5" />
+                      <span>Open in Mail Client</span>
+                    </a>
+                  </div>
+                </div>
+              )}
 
               {/* Context Reasons Card */}
               <div className="space-y-2">
